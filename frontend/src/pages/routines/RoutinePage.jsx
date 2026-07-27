@@ -6,7 +6,7 @@ import TodaysRoutine from "@/components/routine/TodaysRoutine";
 import { useGetClassesQuery } from "@/features/apis/classesApi";
 import { useGetSubjectsQuery } from "@/features/apis/subjectsApi";
 import { useGetTeachersQuery } from "@/features/apis/teachersApi";
-import WeeklyTimetable from "@/components/routine/WeeklyTimeTable";
+import WeeklyTimetable from "@/components/routine/WeeklyTimetable";
 import Loader from "@/components/common/Loader";
 
 export default function RoutinesPage() {
