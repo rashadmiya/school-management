@@ -1,0 +1,41 @@
+services:
+
+  backend:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+
+    container_name: school-backend
+
+    restart: unless-stopped
+
+    env_file:
+      - .env
+
+    networks:
+      - proxy-network
+
+  frontend:
+    build:
+      context: ../frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${VITE_API_URL}
+
+    container_name: school-frontend
+
+    restart: unless-stopped
+
+    depends_on:
+      - backend
+
+    environment:
+      BACKEND_HOST: ${BACKEND_HOST}
+      BACKEND_PORT: ${BACKEND_PORT}
+
+    networks:
+      - proxy-network
+
+networks:
+  proxy-network:
+    external: true
