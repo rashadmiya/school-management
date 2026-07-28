@@ -9,14 +9,31 @@ const app = express();
 
 
 // working cors
+const allowedOrigins = process.env.FRONTEND_URL
+  .split(",")
+  .map(origin => origin.trim());
+
 const corsOptions = {
-  origin: ["https://nakhs.appayansoft.agency", "http://localhost:5173"], // Explicitly list origins
+  origin(origin, callback) {
+
+    // Allow requests like Postman or server-to-server
+    if (!origin) {
+      return callback(null, true);
+    }
+
+    if (allowedOrigins.includes(origin)) {
+      return callback(null, true);
+    }
+
+    return callback(new Error("Not allowed by CORS"));
+  },
+
   credentials: true,
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"], // Include OPTIONS explicitly
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 };
 
-app.use(cors(corsOptions))
+app.use(cors(corsOptions));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
