@@ -1,4 +1,4 @@
-name: inventory
+name: school-app
 services:
 
   backend:
