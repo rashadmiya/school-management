@@ -24,6 +24,8 @@ const PublicHeader = () => {
     const { data: meData } = useMeQuery();
     const user = meData?.user || {};
 
+    console.log("user at the public header :", user)
+
     const handleLogout = async () => {
         await logOutApiCall().unwrap();
         dispatch(userLoggedOut());
@@ -118,7 +120,7 @@ const PublicHeader = () => {
                                 </Link>
                             ))}
 
-                            {user ? (
+                            {user?.name ? (
                                 <div className="flex flex-col space-y-2 pt-2 border-t">
                                     <Button variant="outline" onClick={handleLogout} className="w-full">
                                         Logout

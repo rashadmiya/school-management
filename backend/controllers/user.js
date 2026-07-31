@@ -106,6 +106,11 @@ router.post("/login-user", catchAsyncErrors(async (req, res, next) => {
     return next(new ErrorHandler("Invalid credentials", 400));
   }
 
+  // Check if role exists
+  if (!user.role) {
+    return next(new ErrorHandler("User role not found", 400));
+  }
+
   // Get profile data based on role
   let profile = null;
   if (user.role.name === 'teacher') {

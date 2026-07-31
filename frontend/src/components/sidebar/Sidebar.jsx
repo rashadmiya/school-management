@@ -19,12 +19,10 @@ import {
   Calendar,
   ClipboardList,
   Currency,
-  FileText,
   GamepadDirectional,
   Home,
   LogOut,
   LucideSquareArrowOutUpRight,
-  Megaphone,
   Settings,
   Shield,
   Users
