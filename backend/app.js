@@ -53,7 +53,7 @@ app.use(express.static('public'));
 
 // Test route
 app.use("/test", (req, res) => {
-  res.send("Hello world!");
+  res.send("Hello from school420!");
 });
 
 // Import routes
