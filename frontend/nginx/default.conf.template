@@ -1,3 +1,4 @@
+# frontend/nginx/default.conf.template file
 server {
 
     listen 80;

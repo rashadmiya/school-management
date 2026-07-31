@@ -12,7 +12,7 @@ const sendToken = require("../utils/jwtToken");
 const { isAuthenticated, isAdmin } = require("../middleware/auth");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
-const { activation_link, frontent } = require("../constant_routes");
+
 const Parent = require("../models/Parent");
 const Teacher = require("../models/Teacher");
 
@@ -45,7 +45,7 @@ router.post("/create-user",
       password,
       avatar: fileUrl
     });
-    const activationUrl = `${activation_link}${activationToken}`;
+    const activationUrl = `${process.env.ACTIVATION_LINK}${activationToken}`;
 
     await sendMail({
       email,
@@ -187,7 +187,6 @@ router.get(
   "/auth/me",
   isAuthenticated,
   catchAsyncErrors(async (req, res) => {
-    // console.log("me at backend :", req.user._id);
     const token = req.token; // ✅ grab the token from middleware
     const user = await User.findById(req.user._id)
       .populate("role");
@@ -269,7 +268,7 @@ router.post("/forgot-password", catchAsyncErrors(async (req, res, next) => {
   user.resetPasswordExpire = Date.now() + 15 * 60 * 1000; // 15 mins
   await user.save({ validateBeforeSave: false });
 
-  const resetUrl = `${frontent}reset-password/${resetToken}`;
+  const resetUrl = `${process.env.FRONTEND_URL}/reset-password/${resetToken}`;
 
   await sendMail({
     email: user.email,

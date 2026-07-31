@@ -9,7 +9,7 @@ const app = express();
 
 
 // working cors
-// const allowedOrigins = process.env.FRONTEND_URL
+// const allowedOrigins = process.env.FRONTEND_URL_FOR_CORS
 //   .split(",")
 //   .map(origin => origin.trim());
 
