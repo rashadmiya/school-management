@@ -9,6 +9,7 @@ import { Link, useNavigate, useLocation } from "react-router-dom";
 import { userLoggedOut } from "@/features/slices/authSlice";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "react-toastify";
+import schoolLogo from "../../assets/appayan-sm-2.png";
 
 const PublicHeader = () => {
     const navigate = useNavigate();
