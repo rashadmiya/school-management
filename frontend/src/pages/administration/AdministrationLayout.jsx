@@ -1,10 +1,22 @@
 // /src/pages/administration/AdministrationLayout.jsx
 import React from 'react';
 import { Outlet, NavLink } from 'react-router-dom';
-import { Shield, Users, Key, Grid, FileText, Megaphone } from 'lucide-react';
+import { Shield, Users, Key, Grid, FileText, Megaphone, Settings, GamepadDirectional } from 'lucide-react';
 
 const AdministrationLayout = () => {
   const adminLinks = [
+    {
+      name: "Settings",
+      icon: <Settings className="w-4 h-4" />,
+      path: "/admin/settings",
+      description: "Configure system settings and preferences"
+    },
+    {
+      name: "Directory",
+      icon: <GamepadDirectional className="w-4 h-4" />,
+      path: "/admin/directory",
+      description: "Manage system directory"
+    },
     {
       name: 'Announcements',
       path: '/admin/announcements',
@@ -35,6 +47,7 @@ const AdministrationLayout = () => {
       icon: <FileText className="w-4 h-4" />,
       description: 'Create and updates public pages'
     },
+
     // Add more admin features here in the future
   ];
 

@@ -19,11 +19,9 @@ import {
   Calendar,
   ClipboardList,
   Currency,
-  GamepadDirectional,
   Home,
   LogOut,
   LucideSquareArrowOutUpRight,
-  Settings,
   Shield,
   Users
 } from "lucide-react";
@@ -75,8 +73,8 @@ export default function Sidebar() {
     // { label: "Pages", icon: FileText, path: "/admin/pages", roles: ["admin"] },
     // { label: "Announcements", icon: Megaphone, path: "/admin/announcements", roles: ["admin", "teacher"] },
     { label: "Administration", icon: Shield, path: "/admin/administration", roles: ["admin", "teacher"] },
-    { label: "Directory", icon: GamepadDirectional, path: "/admin/directory", roles: ["admin", "teacher"] },
-    { label: "Settings", icon: Settings, path: "/admin/settings", roles: ["admin"] },
+    // { label: "Directory", icon: GamepadDirectional, path: "/admin/directory", roles: ["admin", "teacher"] },
+    // { label: "Settings", icon: Settings, path: "/admin/settings", roles: ["admin"] },
   ];
 
   const handleLogout = async () => {
@@ -165,6 +163,3 @@ export default function Sidebar() {
     </aside>
   );
 }
-
-
-
