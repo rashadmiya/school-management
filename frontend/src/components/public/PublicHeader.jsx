@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useLogOutMutation, useMeQuery } from "@/features/apis/authApi";
 import { useGetAllPagesQuery, useGetPublicSettingsQuery } from "@/features/apis/publicApi";
 import { useAppDispatch } from "@/features/store";
-import { Menu, X, User, LogOut, Home, Bell, Users, LayoutDashboard, ChevronDown, GraduationCap } from "lucide-react";
+import { Menu, X, User, LogOut, Home, Bell, Users, LayoutDashboard, ChevronDown, GraduationCap, StepForward, Club, IdCard, PenBox, GalleryHorizontal } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { Link, useNavigate, useLocation } from "react-router-dom";
 import { userLoggedOut } from "@/features/slices/authSlice";
@@ -83,13 +83,18 @@ const PublicHeader = () => {
 
     // Navigation items
     const navItems = [
+        { path: '/directory', label: 'Administration', icon: Users },
+        { path: '/classes', label: 'Classes', icon: StepForward },
+        // ...pages.map(page => ({
+        //     path: `/${page.slug === 'home' ? '' : page.slug}`,
+        //     label: page.title,
+        //     icon: GraduationCap
+        // })),
+        { path: '/clubs', label: 'Clubs', icon: Club },
         { path: '/announcements', label: 'Notices', icon: Bell },
-        { path: '/directory', label: 'Directory', icon: Users },
-        ...pages.map(page => ({
-            path: `/${page.slug === 'home' ? '' : page.slug}`,
-            label: page.title,
-            icon: GraduationCap
-        }))
+        { path: '/gallery', label: 'Gallery', icon: GalleryHorizontal },
+        { path: '/about-us', label: "About Us", icon: PenBox }
+
     ];
 
     const isActivePath = (path) => {
@@ -102,8 +107,8 @@ const PublicHeader = () => {
             <div className="container mx-auto px-4">
                 <div className="flex justify-between items-center h-20">
                     {/* Logo and School Name */}
-                    <Link 
-                        to="/" 
+                    <Link
+                        to="/"
                         className="flex items-center space-x-3 group transition-transform hover:scale-105"
                     >
                         <div className="relative">
@@ -194,15 +199,15 @@ const PublicHeader = () => {
                             </div>
                         ) : (
                             <div className="flex items-center space-x-2 ml-4">
-                                <Button 
-                                    variant="outline" 
-                                    asChild 
+                                <Button
+                                    variant="outline"
+                                    asChild
                                     className="text-white border-white/30 hover:bg-white/20 hover:text-white transition-all duration-200"
                                 >
                                     <Link to="/login">Login</Link>
                                 </Button>
-                                <Button 
-                                    asChild 
+                                <Button
+                                    asChild
                                     className="bg-white text-blue-600 hover:bg-blue-50 hover:scale-105 transition-all duration-200 shadow-lg"
                                 >
                                     <Link to="/signup">Sign Up</Link>
@@ -294,17 +299,17 @@ const PublicHeader = () => {
                                     </div>
                                 ) : (
                                     <div className="grid grid-cols-2 gap-3">
-                                        <Button 
-                                            variant="outline" 
-                                            asChild 
+                                        <Button
+                                            variant="outline"
+                                            asChild
                                             className="text-white border-white/30 hover:bg-white/20 hover:text-white"
                                         >
                                             <Link to="/login" onClick={() => setIsMenuOpen(false)}>
                                                 Login
                                             </Link>
                                         </Button>
-                                        <Button 
-                                            asChild 
+                                        <Button
+                                            asChild
                                             className="bg-white text-blue-600 hover:bg-blue-50"
                                         >
                                             <Link to="/signup" onClick={() => setIsMenuOpen(false)}>
