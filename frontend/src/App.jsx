@@ -27,14 +27,14 @@ import ApplyFees from "@/pages/finance/fees/ApplyFees";
 import ReceivePayment from "@/pages/finance/Payments/ReceivePayment";
 import PaymentHistory from "@/pages/finance/Payments/PaymentHistory";
 import AdvanceBalance from "@/pages/finance/Payments/AdvanceBalance";
-import ProcessRefund from "@/pages/finance/refunds/ProcessRefund";
-import RefundHistory from "@/pages/finance/refunds/RefundHistory";
-import RequestWaiver from "@/pages/finance/waivers/RequestWaiver";
-import ApproveWaivers from "@/pages/finance/waivers/ApproveWaivers";
-import StudentLedger from "@/pages/finance/ledger/StudentLedger";
-import CollectionReport from "@/pages/finance/reports/CollectionReport";
-import OutstandingReport from "@/pages/finance/reports/OutstandingReport";
-import SessionSettings from "@/pages/finance/settings/SessionSettings";
+import ProcessRefund from "@/pages/finance/Refunds/ProcessRefund";
+import RefundHistory from "@/pages/finance/Refunds/RefundHistory";
+import RequestWaiver from "@/pages/finance/Waivers/RequestWaiver";
+import ApproveWaivers from "@/pages/finance/Waivers/ApproveWaivers";
+import StudentLedger from "@/pages/finance/Ledger/StudentLedger";
+import CollectionReport from "@/pages/finance/Reports/CollectionReport";
+import OutstandingReport from "@/pages/finance/Reports/OutstandingReport";
+import SessionSettings from "@/pages/finance/Settings/SessionSettings";
 
 // Teacher Portal Components
 import TeacherDashboard from "./components/teacher/TeacherDashboard";
