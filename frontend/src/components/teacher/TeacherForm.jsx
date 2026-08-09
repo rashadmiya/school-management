@@ -156,7 +156,7 @@ export default function TeacherDialogForm({
   const onSubmit = async (formData) => {
     try {
       // For new teacher, validate password
-        console.log("updating teacher:", initialData)
+      console.log("updating teacher:", initialData)
 
       if (!initialData) {
         if (!formData.password) {
@@ -241,21 +241,21 @@ export default function TeacherDialogForm({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-auto flex flex-col p-0">
+      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-auto flex flex-col p-0 bg-white text-gray-900">
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b">
+        <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-gray-200">
           <DialogHeader>
-            <DialogTitle className="text-xl">
+            <DialogTitle className="text-xl text-gray-900">
               {initialData ? "Edit Teacher" : "Create New Teacher"}
             </DialogTitle>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-            <TabsList className="grid grid-cols-4">
-              <TabsTrigger value="basic">Basic Info</TabsTrigger>
-              <TabsTrigger value="professional">Professional</TabsTrigger>
-              <TabsTrigger value="qualification">Qualification</TabsTrigger>
-              <TabsTrigger value="assignments">Assignments</TabsTrigger>
+            <TabsList className="grid grid-cols-4 bg-gray-100">
+              <TabsTrigger value="basic" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Basic Info</TabsTrigger>
+              <TabsTrigger value="professional" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Professional</TabsTrigger>
+              <TabsTrigger value="qualification" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Qualification</TabsTrigger>
+              <TabsTrigger value="assignments" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Assignments</TabsTrigger>
             </TabsList>
 
             {/* Scrollable form body */}
@@ -267,10 +267,10 @@ export default function TeacherDialogForm({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Name */}
                     <div className="space-y-2">
-                      <Label>Full Name *</Label>
+                      <Label className="text-gray-700">Full Name *</Label>
                       <Input
                         {...register("name", { required: "Name is required" })}
-                        className={errors.name ? "border-red-500" : ""}
+                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.name ? "border-red-500" : ""}`}
                         placeholder="Enter full name"
                       />
                       {errors.name && (
@@ -280,7 +280,7 @@ export default function TeacherDialogForm({
 
                     {/* Email */}
                     <div className="space-y-2">
-                      <Label>Email *</Label>
+                      <Label className="text-gray-700">Email *</Label>
                       <Input
                         type="email"
                         {...register("email", {
@@ -290,7 +290,7 @@ export default function TeacherDialogForm({
                             message: "Invalid email address"
                           }
                         })}
-                        className={errors.email ? "border-red-500" : ""}
+                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.email ? "border-red-500" : ""}`}
                         placeholder="teacher@school.com"
                       />
                       {errors.email && (
@@ -300,10 +300,10 @@ export default function TeacherDialogForm({
 
                     {/* Phone Number */}
                     <div className="space-y-2">
-                      <Label>Phone Number *</Label>
+                      <Label className="text-gray-700">Phone Number *</Label>
                       <Input
                         {...register("phoneNumber", { required: "Phone number is required" })}
-                        className={errors.phoneNumber ? "border-red-500" : ""}
+                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.phoneNumber ? "border-red-500" : ""}`}
                         placeholder="+8801234567890"
                       />
                       {errors.phoneNumber && (
@@ -313,31 +313,31 @@ export default function TeacherDialogForm({
 
                     {/* Gender */}
                     <div className="space-y-2">
-                      <Label>Gender</Label>
+                      <Label className="text-gray-700">Gender</Label>
                       <Select
                         value={watch("gender")}
                         onValueChange={(value) => setValue("gender", value)}
                       >
-                        <SelectTrigger>
+                        <SelectTrigger className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                           <SelectValue placeholder="Select gender" />
                         </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="male">Male</SelectItem>
-                          <SelectItem value="female">Female</SelectItem>
-                          <SelectItem value="other">Other</SelectItem>
+                        <SelectContent className="bg-white">
+                          <SelectItem value="male" className="text-gray-900">Male</SelectItem>
+                          <SelectItem value="female" className="text-gray-900">Female</SelectItem>
+                          <SelectItem value="other" className="text-gray-900">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     {/* Date of Birth */}
                     <div className="space-y-2">
-                      <Label>Date of Birth</Label>
+                      <Label className="text-gray-700">Date of Birth</Label>
                       <div className="relative">
                         <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
                           type="date"
                           {...register("dateOfBirth")}
-                          className="pl-10"
+                          className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 pl-10"
                           max={new Date().toISOString().split('T')[0]}
                         />
                       </div>
@@ -345,9 +345,10 @@ export default function TeacherDialogForm({
 
                     {/* Religion */}
                     <div className="space-y-2">
-                      <Label>Religion</Label>
+                      <Label className="text-gray-700">Religion</Label>
                       <Input
                         {...register("religion")}
+                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         placeholder="Religion"
                       />
                     </div>
@@ -355,27 +356,27 @@ export default function TeacherDialogForm({
 
                   {/* Address */}
                   <div className="space-y-2">
-                    <Label>Address</Label>
+                    <Label className="text-gray-700">Address</Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
                       <Textarea
                         {...register("address")}
-                        className="pl-10 min-h-[40px]"
+                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 pl-10 min-h-[40px]"
                         placeholder="Enter full address"
                       />
                     </div>
                   </div>
 
                   {/* Photo Upload */}
-                  <div className="space-y-3 border rounded-lg p-4">
-                    <Label>Profile Photo</Label>
+                  <div className="space-y-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
+                    <Label className="text-gray-700">Profile Photo</Label>
                     <div className="flex items-center gap-4">
                       <div className="relative">
                         {photoPreview ? (
                           <img
                             src={photoPreview}
                             alt="Preview"
-                            className="w-24 h-24 rounded-full object-cover border"
+                            className="w-24 h-24 rounded-full object-cover border border-gray-300"
                           />
                         ) : (
                           <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
@@ -388,7 +389,7 @@ export default function TeacherDialogForm({
                           type="file"
                           accept="image/*"
                           onChange={handlePhotoChange}
-                          className="mb-2"
+                          className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 mb-2"
                         />
                         <p className="text-xs text-gray-500">
                           {initialData && initialData.photoUrl
@@ -404,13 +405,13 @@ export default function TeacherDialogForm({
 
                   {/* Password Fields (only for new teacher) */}
                   {!initialData && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t pt-4">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-200 pt-4">
                       <div className="space-y-2">
-                        <Label>Password *</Label>
+                        <Label className="text-gray-700">Password *</Label>
                         <Input
                           type="password"
                           {...register("password", { required: "Password is required" })}
-                          className={errors.password ? "border-red-500" : ""}
+                          className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.password ? "border-red-500" : ""}`}
                           placeholder="Enter password"
                         />
                         {errors.password && (
@@ -419,13 +420,13 @@ export default function TeacherDialogForm({
                       </div>
 
                       <div className="space-y-2">
-                        <Label>Confirm Password *</Label>
+                        <Label className="text-gray-700">Confirm Password *</Label>
                         <Input
                           type="password"
                           {...register("confirmPassword", {
                             required: "Confirm your password",
                           })}
-                          className={errors.confirmPassword ? "border-red-500" : ""}
+                          className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.confirmPassword ? "border-red-500" : ""}`}
                           placeholder="Confirm password"
                         />
                         {errors.confirmPassword && (
@@ -441,10 +442,10 @@ export default function TeacherDialogForm({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Designation */}
                     <div className="space-y-2">
-                      <Label>Designation *</Label>
+                      <Label className="text-gray-700">Designation *</Label>
                       <Input
                         {...register("designation", { required: "Designation is required" })}
-                        className={errors.designation ? "border-red-500" : ""}
+                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.designation ? "border-red-500" : ""}`}
                         placeholder="e.g., Senior Teacher, Head of Department"
                       />
                       {errors.designation && (
@@ -454,13 +455,13 @@ export default function TeacherDialogForm({
 
                     {/* Joining Date */}
                     <div className="space-y-2">
-                      <Label>Joining Date *</Label>
+                      <Label className="text-gray-700">Joining Date *</Label>
                       <div className="relative">
                         <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
                           type="date"
                           {...register("joiningDate", { required: "Joining date is required" })}
-                          className={errors.joiningDate ? "border-red-500 pl-10" : "pl-10"}
+                          className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 pl-10 ${errors.joiningDate ? "border-red-500" : ""}`}
                         />
                       </div>
                       {errors.joiningDate && (
@@ -470,9 +471,10 @@ export default function TeacherDialogForm({
 
                     {/* National ID */}
                     <div className="space-y-2">
-                      <Label>National ID Number</Label>
+                      <Label className="text-gray-700">National ID Number</Label>
                       <Input
                         {...register("nationalIdNo")}
+                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         placeholder="National ID number"
                       />
                     </div>
@@ -491,27 +493,30 @@ export default function TeacherDialogForm({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Qualification Name */}
                     <div className="space-y-2">
-                      <Label>Qualification Name</Label>
+                      <Label className="text-gray-700">Qualification Name</Label>
                       <Input
                         {...register("lastQualification.name")}
+                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         placeholder="e.g., Master of Science, Bachelor of Arts"
                       />
                     </div>
 
                     {/* Major/Subject */}
                     <div className="space-y-2">
-                      <Label>Major/Subject</Label>
+                      <Label className="text-gray-700">Major/Subject</Label>
                       <Input
                         {...register("lastQualification.major")}
+                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         placeholder="e.g., Computer Science, Mathematics"
                       />
                     </div>
 
                     {/* Institute */}
                     <div className="md:col-span-2 space-y-2">
-                      <Label>Institute/University</Label>
+                      <Label className="text-gray-700">Institute/University</Label>
                       <Input
                         {...register("lastQualification.institute")}
+                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
                         placeholder="e.g., University of Oxford, Harvard University"
                       />
                     </div>
@@ -522,7 +527,7 @@ export default function TeacherDialogForm({
                 <TabsContent value="assignments" className="space-y-4 mt-0">
                   {/* Assign Subjects */}
                   <div className="space-y-3">
-                    <Label>Assign Subjects</Label>
+                    <Label className="text-gray-700">Assign Subjects</Label>
                     <Select
                       onValueChange={(value) => {
                         const current = watch("assignedSubjects");
@@ -531,12 +536,12 @@ export default function TeacherDialogForm({
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                         <SelectValue placeholder="Select subjects to assign" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white">
                         {subjects.map((sub) => (
-                          <SelectItem key={sub._id} value={sub._id}>
+                          <SelectItem key={sub._id} value={sub._id} className="text-gray-900">
                             {sub.name} ({sub.code})
                           </SelectItem>
                         ))}
@@ -575,7 +580,7 @@ export default function TeacherDialogForm({
 
                   {/* Assign Classes */}
                   <div className="space-y-3">
-                    <Label>Assign Classes</Label>
+                    <Label className="text-gray-700">Assign Classes</Label>
                     <Select
                       onValueChange={(value) => {
                         const current = watch("assignedClasses");
@@ -584,12 +589,12 @@ export default function TeacherDialogForm({
                         }
                       }}
                     >
-                      <SelectTrigger>
+                      <SelectTrigger className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
                         <SelectValue placeholder="Select classes to assign" />
                       </SelectTrigger>
-                      <SelectContent>
+                      <SelectContent className="bg-white">
                         {classes.map((cls) => (
-                          <SelectItem key={cls._id} value={cls._id}>
+                          <SelectItem key={cls._id} value={cls._id} className="text-gray-900">
                             {cls.name} {cls.section ? `- (${cls.section.name})` : ''}
                           </SelectItem>
                         ))}
@@ -631,10 +636,8 @@ export default function TeacherDialogForm({
           </Tabs>
         </div>
 
-
-
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white px-6 py-4 border-t flex justify-between gap-3">
+        <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-gray-200 flex justify-between gap-3">
           <div className="flex gap-2">
             <Button
               type="button"
@@ -642,6 +645,7 @@ export default function TeacherDialogForm({
               onClick={() => setActiveTab(activeTab === "basic" ? "assignments" :
                 activeTab === "professional" ? "basic" :
                   activeTab === "qualification" ? "professional" : "qualification")}
+              className="text-gray-700 border-gray-300 hover:bg-gray-50"
             >
               Previous
             </Button>
@@ -651,6 +655,7 @@ export default function TeacherDialogForm({
               onClick={() => setActiveTab(activeTab === "basic" ? "professional" :
                 activeTab === "professional" ? "qualification" :
                   activeTab === "qualification" ? "assignments" : "basic")}
+              className="text-gray-700 border-gray-300 hover:bg-gray-50"
             >
               Next
             </Button>
@@ -662,6 +667,7 @@ export default function TeacherDialogForm({
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
+              className="text-gray-700 border-gray-300 hover:bg-gray-50"
             >
               Cancel
             </Button>
@@ -669,6 +675,7 @@ export default function TeacherDialogForm({
               type="submit"
               form="teacherForm"
               disabled={isLoading}
+              className="bg-blue-600 hover:bg-blue-700 text-white"
             >
               {isLoading ? "Saving..." : initialData ? "Update Teacher" : "Create Teacher"}
             </Button>
@@ -678,7 +685,6 @@ export default function TeacherDialogForm({
     </Dialog>
   );
 }
-
 
 
 // import { Button } from "@/components/ui/button";

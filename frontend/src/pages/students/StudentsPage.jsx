@@ -1,35 +1,37 @@
-import React, { useState } from "react";
-import { 
-  useGetStudentsQuery, 
-  useDeleteStudentMutation,
-  useUploadStudentPhotoMutation,
-} from "@/features/apis/studentsApi";
-import { useGetClassesQuery } from "@/features/apis/classesApi";
-import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { 
-  Edit, 
-  Trash2, 
-  Plus, 
-  User, 
-  Phone, 
-  Mail, 
-  BookOpen, 
-  Download,
-  Camera,
-  Filter,
-  X
-} from "lucide-react";
-import { toast } from "react-toastify";
+// pages/students/StudentsPage.jsx
 import StudentDialogForm from "@/components/student/StudentDialogForm";
 import StudentSearchBar from "@/components/student/StudentSearchBar";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { useGetClassesQuery } from "@/features/apis/classesApi";
+import {
+  useDeleteStudentMutation,
+  useGetStudentsQuery,
+  useUploadStudentPhotoMutation,
+} from "@/features/apis/studentsApi";
+import { useAppSelector } from "@/features/store";
 import { backend_url } from "@/utils/server";
+import {
+  BookOpen,
+  Camera,
+  Download,
+  Edit,
+  Phone,
+  Plus,
+  Trash2,
+  User,
+  X
+} from "lucide-react";
+import { useState } from "react";
+import { toast } from "react-toastify";
 
 export default function StudentsPage() {
+  const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+  
   const [page, setPage] = useState(1);
   const [searchParams, setSearchParams] = useState({});
   const [photoUploadFor, setPhotoUploadFor] = useState(null);
@@ -56,9 +58,40 @@ export default function StudentsPage() {
 
   const students = data?.docs || data?.students || [];
 
-  // console.log("students :", students)
   // Get unique sessions from students for filter dropdown
   const sessions = [...new Set(students.map(s => s.session).filter(Boolean))];
+
+  // Theme-based classes
+  const theme = {
+    textPrimary: isDarkMode ? "text-white" : "text-gray-900",
+    textSecondary: isDarkMode ? "text-gray-300" : "text-gray-700",
+    textMuted: isDarkMode ? "text-gray-400" : "text-gray-500",
+    textLight: isDarkMode ? "text-gray-500" : "text-gray-400",
+    border: isDarkMode ? "border-gray-700" : "border-gray-200",
+    bgCard: isDarkMode ? "bg-gray-900/50" : "bg-white",
+    bgHover: isDarkMode ? "hover:bg-gray-800/50" : "hover:bg-gray-50/50",
+    bgInput: isDarkMode ? "bg-gray-800" : "bg-white",
+    inputBorder: isDarkMode ? "border-gray-700" : "border-gray-200",
+    badge: {
+      outline: isDarkMode ? "border-gray-700 text-gray-300" : "",
+      secondary: isDarkMode ? "bg-gray-800 text-gray-300 border-gray-700" : "",
+      destructive: isDarkMode ? "bg-red-500/20 text-red-400 border-red-500/30" : "",
+    },
+    stat: {
+      blue: isDarkMode
+        ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
+        : "bg-blue-50 text-blue-600",
+      green: isDarkMode
+        ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
+        : "bg-green-50 text-green-600",
+      purple: isDarkMode
+        ? "bg-purple-500/10 border-purple-500/20 text-purple-400"
+        : "bg-purple-50 text-purple-600",
+      orange: isDarkMode
+        ? "bg-orange-500/10 border-orange-500/20 text-orange-400"
+        : "bg-orange-50 text-orange-600",
+    }
+  };
 
   // Handle search from SearchBar
   const handleSearch = (searchFilters) => {
@@ -97,7 +130,7 @@ export default function StudentsPage() {
   // Handle photo upload
   const handlePhotoUpload = async () => {
     if (!photoFile || !photoUploadFor) return;
-        console.log("handle photo upload :", photoFile)
+    console.log("handle photo upload :", photoFile)
     try {
       const formData = new FormData();
       formData.append('photo', photoFile);
@@ -164,18 +197,18 @@ export default function StudentsPage() {
     const student = students.find(s => s._id === photoUploadFor);
     
     return (
-      <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-        <Card className="w-full max-w-md">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
+      <div className={`fixed inset-0 ${isDarkMode ? "bg-black/70" : "bg-black/50"} flex items-center justify-center z-50 p-4`}>
+        <Card className={`w-full max-w-md ${isDarkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200"} shadow-2xl`}>
+          <CardHeader className={`${isDarkMode ? "border-gray-800" : "border-gray-100"} border-b pb-3`}>
+            <CardTitle className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
               <Camera className="w-5 h-5" />
               Upload Student Photo
             </CardTitle>
-            <CardDescription>
+            <CardDescription className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
               Upload photo for {student?.name || 'Student'}
             </CardDescription>
           </CardHeader>
-          <CardContent className="space-y-4">
+          <CardContent className="space-y-4 pt-6">
             <div className="flex flex-col items-center gap-4">
               {/* Photo Preview */}
               <div className="relative">
@@ -186,8 +219,8 @@ export default function StudentsPage() {
                     className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
                   />
                 ) : (
-                  <div className="w-32 h-32 rounded-full bg-gray-200 flex items-center justify-center border-4 border-white shadow-lg">
-                    <User className="w-12 h-12 text-gray-400" />
+                  <div className={`w-32 h-32 rounded-full ${isDarkMode ? "bg-gray-800" : "bg-gray-200"} flex items-center justify-center border-4 border-white shadow-lg`}>
+                    <User className={`w-12 h-12 ${isDarkMode ? "text-gray-600" : "text-gray-400"}`} />
                   </div>
                 )}
                 {student?.photoUrl && !photoPreview && (
@@ -197,28 +230,28 @@ export default function StudentsPage() {
                     className="w-32 h-32 rounded-full object-cover border-4 border-white shadow-lg"
                     onError={(e) => {
                       e.target.style.display = 'none';
-
                       const fallback = e.target.nextElementSibling;
                       if (fallback && fallback.style) {
                         fallback.style.display = 'flex';
                       }
                     }}
-
                   />
                 )}
               </div>
 
               {/* File Input */}
               <div className="w-full space-y-2">
-                <Label htmlFor="photo-file-input">Choose a photo</Label>
+                <Label className={isDarkMode ? "text-gray-300" : "text-gray-700"}>
+                  Choose a photo
+                </Label>
                 <Input
                   id="photo-file-input"
                   type="file"
                   accept="image/*"
                   onChange={handlePhotoSelect}
-                  className="cursor-pointer"
+                  className={`cursor-pointer ${isDarkMode ? "bg-gray-800 border-gray-700 text-white" : ""}`}
                 />
-                <p className="text-xs text-gray-500 text-center">
+                <p className={`text-xs ${isDarkMode ? "text-gray-500" : "text-gray-500"} text-center`}>
                   Supported formats: JPG, PNG, WebP. Max size: 5MB
                 </p>
               </div>
@@ -228,7 +261,7 @@ export default function StudentsPage() {
             <div className="flex gap-2 pt-4">
               <Button
                 variant="outline"
-                className="flex-1"
+                className={`flex-1 ${isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" : ""}`}
                 onClick={resetPhotoUpload}
               >
                 Cancel
@@ -236,7 +269,7 @@ export default function StudentsPage() {
               <Button
                 onClick={handlePhotoUpload}
                 disabled={!photoFile}
-                className="flex-1"
+                className="flex-1 bg-blue-600 hover:bg-blue-700 text-white disabled:opacity-50"
               >
                 {photoFile ? "Upload Photo" : "Select Photo First"}
               </Button>
@@ -247,7 +280,7 @@ export default function StudentsPage() {
     );
   };
 
-  // Table columns
+  // Table columns with dark mode support
   const columns = [
     {
       key: "photo",
@@ -259,14 +292,14 @@ export default function StudentsPage() {
             <img
               src={`${backend_url}${row.photo}`}
               alt={row.name}
-              className="w-10 h-10 rounded-full object-cover border-2 border-white shadow-sm"
+              className={`w-10 h-10 rounded-full object-cover border-2 ${isDarkMode ? "border-gray-700" : "border-white"} shadow-sm`}
               onError={(e) => {
-                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || '')}&background=random`;
+                e.target.src = `https://ui-avatars.com/api/?name=${encodeURIComponent(row.name || '')}&background=6366f1&color=fff&size=40`;
               }}
             />
           ) : (
-            <div className="w-10 h-10 rounded-full bg-gray-200 flex items-center justify-center border-2 border-white shadow-sm">
-              <User className="w-5 h-5 text-gray-500" />
+            <div className={`w-10 h-10 rounded-full ${isDarkMode ? "bg-gray-800" : "bg-gray-200"} flex items-center justify-center border-2 ${isDarkMode ? "border-gray-700" : "border-white"} shadow-sm`}>
+              <User className={`w-5 h-5 ${isDarkMode ? "text-gray-500" : "text-gray-500"}`} />
             </div>
           )}
           <button
@@ -287,7 +320,7 @@ export default function StudentsPage() {
       key: "rollNumber",
       title: "Roll No.",
       render: (row) => (
-        <Badge variant="outline" className="font-mono">
+        <Badge variant="outline" className={`font-mono ${isDarkMode ? "border-gray-700 text-gray-300" : ""}`}>
           {row.rollNumber}
         </Badge>
       )
@@ -297,20 +330,20 @@ export default function StudentsPage() {
       title: "Student Information",
       render: (row) => (
         <div className="space-y-1">
-          <div className="flex items-center gap-2">
+          <div className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
             <p className="font-medium text-sm">{row.name}</p>
             {row.gender && (
-              <Badge variant="secondary" className="text-xs capitalize">
+              <Badge variant="secondary" className={`text-xs capitalize ${isDarkMode ? "bg-gray-800 text-gray-300 border-gray-700" : ""}`}>
                 {row.gender}
               </Badge>
             )}
             {row.isPhysicallyDisabled && (
-              <Badge variant="destructive" className="text-xs">
+              <Badge variant="destructive" className={`text-xs ${isDarkMode ? "bg-red-500/20 text-red-400 border-red-500/30" : ""}`}>
                 Disabled
               </Badge>
             )}
           </div>
-          <div className="flex items-center gap-3 text-xs text-gray-500">
+          <div className={`flex items-center gap-3 text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
             {row.guardianContact && (
               <div className="flex items-center gap-1">
                 <Phone className="w-3 h-3" />
@@ -331,11 +364,11 @@ export default function StudentsPage() {
       title: "Session",
       render: (row) => (
         row.session ? (
-          <Badge variant="outline" className="text-xs">
+          <Badge variant="outline" className={`text-xs ${isDarkMode ? "border-gray-700 text-gray-300" : ""}`}>
             {row.session}
           </Badge>
         ) : (
-          <span className="text-sm text-gray-400">N/A</span>
+          <span className={`text-sm ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>N/A</span>
         )
       )
     },
@@ -344,11 +377,11 @@ export default function StudentsPage() {
       title: "Religion",
       render: (row) => (
         row.religion ? (
-          <Badge variant="outline" className="text-xs capitalize">
+          <Badge variant="outline" className={`text-xs capitalize ${isDarkMode ? "border-gray-700 text-gray-300" : ""}`}>
             {row.religion}
           </Badge>
         ) : (
-          <span className="text-sm text-gray-400">-</span>
+          <span className={`text-sm ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>-</span>
         )
       )
     },
@@ -357,12 +390,12 @@ export default function StudentsPage() {
       title: "Class",
       render: (row) => (
         row.class ? (
-          <div className="flex items-center gap-2">
-            <BookOpen className="w-4 h-4 text-gray-400" />
+          <div className={`flex items-center gap-2 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+            <BookOpen className={`w-4 h-4 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`} />
             <span className="text-sm">{row.class.name}</span>
           </div>
         ) : (
-          <span className="text-sm text-gray-400">No Class</span>
+          <span className={`text-sm ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>No Class</span>
         )
       )
     },
@@ -372,18 +405,18 @@ export default function StudentsPage() {
       render: (row) => (
         row.parent ? (
           <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <User className="w-3 h-3 text-gray-400" />
+            <div className={`flex items-center gap-2 ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+              <User className={`w-3 h-3 ${isDarkMode ? "text-gray-500" : "text-gray-400"}`} />
               <span className="text-sm font-medium truncate">{row.parent.name}</span>
             </div>
-            <div className="flex items-center gap-2 text-xs text-gray-500">
+            <div className={`flex items-center gap-2 text-xs ${isDarkMode ? "text-gray-500" : "text-gray-500"}`}>
               {row.parent.phone && (
                 <span className="truncate">{row.parent.phone}</span>
               )}
             </div>
           </div>
         ) : (
-          <span className="text-sm text-gray-400">No Parent</span>
+          <span className={`text-sm ${isDarkMode ? "text-gray-500" : "text-gray-400"}`}>No Parent</span>
         )
       )
     },
@@ -397,7 +430,7 @@ export default function StudentsPage() {
             variant="outline"
             size="sm"
             onClick={() => handleEdit(row)}
-            className="h-8 w-8 p-0"
+            className={`h-8 w-8 p-0 ${isDarkMode ? "border-gray-700 text-gray-400 hover:text-blue-400 hover:border-blue-500/50 hover:bg-blue-500/10" : ""}`}
             title="Edit"
           >
             <Edit className="w-3 h-3" />
@@ -406,7 +439,7 @@ export default function StudentsPage() {
             variant="destructive"
             size="sm"
             onClick={() => handleDelete(row._id, row.name)}
-            className="h-8 w-8 p-0"
+            className={`h-8 w-8 p-0 ${isDarkMode ? "bg-red-500/20 text-red-400 hover:bg-red-500/30 border-red-500/30" : ""}`}
             title="Delete"
           >
             <Trash2 className="w-3 h-3" />
@@ -415,7 +448,7 @@ export default function StudentsPage() {
             variant="ghost"
             size="sm"
             onClick={() => setPhotoUploadFor(row._id)}
-            className="h-8 w-8 p-0"
+            className={`h-8 w-8 p-0 ${isDarkMode ? "text-gray-400 hover:text-indigo-400 hover:bg-indigo-500/10" : ""}`}
             title={row.photoUrl ? "Change photo" : "Add photo"}
           >
             <Camera className="w-3 h-3" />
@@ -430,8 +463,10 @@ export default function StudentsPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Students Management</h1>
-          <p className="text-gray-600 mt-2">
+          <h1 className={`text-3xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+            Students Management
+          </h1>
+          <p className={isDarkMode ? "text-gray-400" : "text-gray-600"}>
             Manage student records with photo uploads
           </p>
         </div>
@@ -439,14 +474,14 @@ export default function StudentsPage() {
           <Button
             variant="outline"
             onClick={handleExportCSV}
-            className="flex items-center gap-2"
+            className={`flex items-center gap-2 ${isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" : ""}`}
           >
             <Download className="w-4 h-4" />
             Export
           </Button>
           <Button
             onClick={handleAddNew}
-            className="flex items-center gap-2"
+            className="flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white"
           >
             <Plus className="w-4 h-4" />
             Add Student
@@ -455,10 +490,12 @@ export default function StudentsPage() {
       </div>
 
       {/* Search Bar Section */}
-      <Card>
+      <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
         <CardHeader className="pb-3">
-          <CardTitle className="text-lg">Search & Filter Students</CardTitle>
-          <CardDescription>
+          <CardTitle className={isDarkMode ? "text-white" : "text-gray-900"}>
+            Search & Filter Students
+          </CardTitle>
+          <CardDescription className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
             Use basic search or advanced filters to find students
           </CardDescription>
         </CardHeader>
@@ -474,63 +511,73 @@ export default function StudentsPage() {
 
       {/* Statistics Cards */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
+        <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm hover:shadow-md transition-all`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <User className="w-5 h-5 text-blue-600" />
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? "bg-blue-500/10 border-blue-500/20" : "bg-blue-50 border-blue-100"}`}>
+                <User className={`w-5 h-5 ${isDarkMode ? "text-blue-400" : "text-blue-600"}`} />
               </div>
               <div>
-                <p className="text-2xl font-bold">{students.length}</p>
-                <p className="text-sm text-gray-600">Total Students</p>
+                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                  {students.length}
+                </p>
+                <p className={isDarkMode ? "text-sm text-gray-400" : "text-sm text-gray-600"}>
+                  Total Students
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm hover:shadow-md transition-all`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <BookOpen className="w-5 h-5 text-green-600" />
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? "bg-emerald-500/10 border-emerald-500/20" : "bg-green-50 border-green-100"}`}>
+                <BookOpen className={`w-5 h-5 ${isDarkMode ? "text-emerald-400" : "text-green-600"}`} />
               </div>
               <div>
-                <p className="text-2xl font-bold">
+                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                   {new Set(students.map(s => s.class?.name).filter(Boolean)).size}
                 </p>
-                <p className="text-sm text-gray-600">Active Classes</p>
+                <p className={isDarkMode ? "text-sm text-gray-400" : "text-sm text-gray-600"}>
+                  Active Classes
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm hover:shadow-md transition-all`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <User className="w-5 h-5 text-purple-600" />
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? "bg-purple-500/10 border-purple-500/20" : "bg-purple-50 border-purple-100"}`}>
+                <User className={`w-5 h-5 ${isDarkMode ? "text-purple-400" : "text-purple-600"}`} />
               </div>
               <div>
-                <p className="text-2xl font-bold">
+                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                   {new Set(students.map(s => s.parent?._id).filter(Boolean)).size}
                 </p>
-                <p className="text-sm text-gray-600">Parents</p>
+                <p className={isDarkMode ? "text-sm text-gray-400" : "text-sm text-gray-600"}>
+                  Parents
+                </p>
               </div>
             </div>
           </CardContent>
         </Card>
 
-        <Card>
+        <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm hover:shadow-md transition-all`}>
           <CardContent className="p-4">
             <div className="flex items-center gap-3">
-              <div className="p-2 bg-orange-100 rounded-lg">
-                <Camera className="w-5 h-5 text-orange-600" />
+              <div className={`p-2.5 rounded-lg border ${isDarkMode ? "bg-orange-500/10 border-orange-500/20" : "bg-orange-50 border-orange-100"}`}>
+                <Camera className={`w-5 h-5 ${isDarkMode ? "text-orange-400" : "text-orange-600"}`} />
               </div>
               <div>
-                <p className="text-2xl font-bold">
+                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                   {students.filter(s => s.photoUrl).length}
                 </p>
-                <p className="text-sm text-gray-600">With Photos</p>
+                <p className={isDarkMode ? "text-sm text-gray-400" : "text-sm text-gray-600"}>
+                  With Photos
+                </p>
               </div>
             </div>
           </CardContent>
@@ -538,15 +585,17 @@ export default function StudentsPage() {
       </div>
 
       {/* Students Table */}
-      <Card>
+      <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm overflow-hidden`}>
         <CardHeader>
-          <div className="flex justify-between items-center">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3">
             <div>
-              <CardTitle>Student Records</CardTitle>
-              <CardDescription>
+              <CardTitle className={isDarkMode ? "text-white" : "text-gray-900"}>
+                Student Records
+              </CardTitle>
+              <CardDescription className={isDarkMode ? "text-gray-400" : "text-gray-500"}>
                 {data?.total || 0} students found • Page {page} of {data?.pages || 1}
                 {data?.statistics?.photoCoverage && (
-                  <span className="ml-2 text-green-600">
+                  <span className={`ml-2 ${isDarkMode ? "text-emerald-400" : "text-green-600"}`}>
                     • {data.statistics.photoCoverage}% have photos
                   </span>
                 )}
@@ -555,14 +604,14 @@ export default function StudentsPage() {
             
             {Object.keys(searchParams).length > 0 && (
               <div className="flex items-center gap-2">
-                <Badge variant="outline" className="text-xs">
+                <Badge variant="outline" className={`text-xs ${isDarkMode ? "border-blue-500/30 text-blue-400 bg-blue-500/10" : ""}`}>
                   {Object.keys(searchParams).length} active filters
                 </Badge>
                 <Button 
                   variant="ghost" 
                   size="sm" 
                   onClick={() => handleSearch({})}
-                  className="h-6 text-xs"
+                  className={`h-6 text-xs ${isDarkMode ? "text-gray-400 hover:text-white hover:bg-gray-800" : ""}`}
                 >
                   <X className="w-3 h-3 mr-1" />
                   Clear All
@@ -575,34 +624,34 @@ export default function StudentsPage() {
           {isLoading ? (
             <div className="flex items-center justify-center py-12">
               <div className="text-center">
-                <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-blue-600 mx-auto"></div>
-                <p className="mt-3 text-gray-600">Loading students...</p>
+                <div className={`animate-spin rounded-full h-10 w-10 border-b-2 ${isDarkMode ? "border-blue-400" : "border-blue-600"} mx-auto`}></div>
+                <p className={`mt-3 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>Loading students...</p>
               </div>
             </div>
           ) : students.length === 0 ? (
-            <div className="text-center py-12 text-gray-500">
-              <User className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-              <p className="text-lg font-medium">No students found</p>
+            <div className={`text-center py-12 ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+              <User className={`w-16 h-16 ${isDarkMode ? "text-gray-700" : "text-gray-300"} mx-auto mb-4`} />
+              <p className={`text-lg font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>No students found</p>
               <p className="text-sm mt-1">
                 {Object.keys(searchParams).length > 0 
                   ? "Try adjusting your search filters" 
                   : "Get started by adding your first student"}
               </p>
-              <Button onClick={handleAddNew} className="mt-4">
+              <Button onClick={handleAddNew} className="mt-4 bg-blue-600 hover:bg-blue-700 text-white">
                 <Plus className="w-4 h-4 mr-2" />
                 Add First Student
               </Button>
             </div>
           ) : (
             <>
-              <div className="rounded-lg border overflow-hidden">
+              <div className={`rounded-lg border overflow-hidden ${isDarkMode ? "border-gray-700" : "border-gray-200"}`}>
                 <Table>
-                  <TableHeader>
-                    <TableRow>
+                  <TableHeader className={isDarkMode ? "bg-gray-800" : "bg-gray-50"}>
+                    <TableRow className={isDarkMode ? "border-gray-700" : "border-gray-200"}>
                       {columns.map((column) => (
                         <TableHead 
                           key={column.key} 
-                          className={column.width ? `w-[${column.width}]` : ''}
+                          className={`${isDarkMode ? "text-gray-300" : "text-gray-700"} ${column.width ? `w-[${column.width}]` : ''}`}
                         >
                           {column.title}
                         </TableHead>
@@ -611,9 +660,15 @@ export default function StudentsPage() {
                   </TableHeader>
                   <TableBody>
                     {students.map((student) => (
-                      <TableRow key={student._id} className="hover:bg-gray-50/50">
+                      <TableRow 
+                        key={student._id} 
+                        className={`${isDarkMode ? "border-gray-800 hover:bg-gray-800/50" : "hover:bg-gray-50/50"}`}
+                      >
                         {columns.map((column) => (
-                          <TableCell key={`${student._id}-${column.key}`}>
+                          <TableCell 
+                            key={`${student._id}-${column.key}`}
+                            className={isDarkMode ? "text-gray-300" : "text-gray-700"}
+                          >
                             {column.render ? column.render(student) : student[column.key]}
                           </TableCell>
                         ))}
@@ -624,8 +679,8 @@ export default function StudentsPage() {
               </div>
 
               {/* Pagination */}
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-gray-500">
+              <div className={`flex flex-col sm:flex-row items-center justify-between mt-6 gap-3`}>
+                <div className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
                   Showing {students.length} of {data?.total || 0} students
                   {data?.statistics && (
                     <span className="ml-2">
@@ -639,6 +694,7 @@ export default function StudentsPage() {
                     size="sm"
                     onClick={() => setPage(page - 1)}
                     disabled={page === 1}
+                    className={isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" : ""}
                   >
                     Previous
                   </Button>
@@ -647,6 +703,7 @@ export default function StudentsPage() {
                     size="sm"
                     onClick={() => setPage(page + 1)}
                     disabled={!data?.hasNextPage}
+                    className={isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" : ""}
                   >
                     Next
                   </Button>
@@ -671,440 +728,3 @@ export default function StudentsPage() {
     </div>
   );
 }
-// import React, { useState } from "react";
-// import { useGetStudentsQuery, useDeleteStudentMutation } from "@/features/apis/studentsApi";
-// import { useGetClassesQuery } from "@/features/apis/classesApi";
-// import { Button } from "@/components/ui/button";
-// import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-// import { Badge } from "@/components/ui/badge";
-// import { Edit, Trash2, Plus, User, Phone, Mail, BookOpen, Download } from "lucide-react";
-// import { toast } from "react-toastify";
-// import StudentDialogForm from "@/components/student/StudentDialogForm";
-// import StudentSearchBar from "@/components/student/StudentSearchBar";
-
-// export default function StudentsPage() {
-//   const [page, setPage] = useState(1);
-//   const [searchParams, setSearchParams] = useState({}); // State for search parameters
-  
-//   // Update the query to include searchParams
-//   const { data, isLoading, refetch } = useGetStudentsQuery({ 
-//     page, 
-//     limit: 20,
-//     ...searchParams // Add search parameters to the query
-//   });
-  
-//   const [deleteStudent] = useDeleteStudentMutation();
-//   const [editingStudent, setEditingStudent] = useState(null);
-//   const [isDialogOpen, setIsDialogOpen] = useState(false);
-
-//   const { data: classData } = useGetClassesQuery();
-//   const classes = classData?.classes || [];
-
-//   const students = data?.students || data?.docs || [];
-
-//   // Get unique sessions from students for filter dropdown
-//   const sessions = [...new Set(students.map(s => s.session).filter(Boolean))];
-
-//   // Handle search from SearchBar
-//   const handleSearch = (searchFilters) => {
-//     setSearchParams(searchFilters);
-//     setPage(1); // Reset to first page on new search
-//   };
-
-//   // Handle export to CSV (optional feature)
-//   const handleExportCSV = () => {
-//     // Implementation for CSV export
-//     toast.info("Export feature coming soon!");
-//   };
-
-//   const handleDelete = async (id, studentName) => {
-//     if (!confirm(`Are you sure you want to delete ${studentName}?`)) return;
-//     try {
-//       await deleteStudent(id).unwrap();
-//       toast.success("Student deleted successfully");
-//       refetch();
-//     } catch (err) {
-//       toast.error(err?.data?.message || "Failed to delete student");
-//     }
-//   };
-
-//   const handleEdit = (student) => {
-//     setEditingStudent(student);
-//     setIsDialogOpen(true);
-//   };
-
-//   const handleAddNew = () => {
-//     setEditingStudent(null);
-//     setIsDialogOpen(true);
-//   };
-
-//   const handleSaved = () => {
-//     setIsDialogOpen(false);
-//     setEditingStudent(null);
-//     refetch();
-//     toast.success(editingStudent ? "Student updated successfully" : "Student created successfully");
-//   };
-
-//   const handleDialogOpenChange = (open) => {
-//     if (!open) {
-//       setEditingStudent(null);
-//     }
-//     setIsDialogOpen(open);
-//   };
-
-//   return (
-//     <div className="space-y-6">
-//       {/* Header */}
-//       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-//         <div>
-//           <h1 className="text-3xl font-bold">Students Management</h1>
-//           <p className="text-gray-600 mt-2">
-//             Manage student records, search by religion, session, and other filters
-//           </p>
-//         </div>
-//         <div className="flex gap-2">
-//           <Button
-//             variant="outline"
-//             onClick={handleExportCSV}
-//             className="flex items-center gap-2"
-//           >
-//             <Download className="w-4 h-4" />
-//             Export
-//           </Button>
-//           <Button
-//             onClick={handleAddNew}
-//             className="flex items-center gap-2"
-//           >
-//             <Plus className="w-4 h-4" />
-//             Add Student
-//           </Button>
-//         </div>
-//       </div>
-
-//       {/* Search Bar Section */}
-//       <Card>
-//         <CardHeader className="pb-3">
-//           <CardTitle className="text-lg">Search & Filter Students</CardTitle>
-//           <CardDescription>
-//             Use basic search or advanced filters to find students
-//           </CardDescription>
-//         </CardHeader>
-//         <CardContent>
-//           <StudentSearchBar
-//             onSearch={handleSearch}
-//             classes={classes}
-//             sessions={sessions}
-//             isLoading={isLoading}
-//           />
-//         </CardContent>
-//       </Card>
-
-//       {/* Statistics Cards */}
-//       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-//         <Card>
-//           <CardContent className="p-4">
-//             <div className="flex items-center gap-3">
-//               <div className="p-2 bg-blue-100 rounded-lg">
-//                 <User className="w-5 h-5 text-blue-600" />
-//               </div>
-//               <div>
-//                 <p className="text-2xl font-bold">{students.length}</p>
-//                 <p className="text-sm text-gray-600">Total Students</p>
-//               </div>
-//             </div>
-//           </CardContent>
-//         </Card>
-
-//         <Card>
-//           <CardContent className="p-4">
-//             <div className="flex items-center gap-3">
-//               <div className="p-2 bg-green-100 rounded-lg">
-//                 <BookOpen className="w-5 h-5 text-green-600" />
-//               </div>
-//               <div>
-//                 <p className="text-2xl font-bold">
-//                   {new Set(students.map(s => s.class?.name).filter(Boolean)).size}
-//                 </p>
-//                 <p className="text-sm text-gray-600">Active Classes</p>
-//               </div>
-//             </div>
-//           </CardContent>
-//         </Card>
-
-//         <Card>
-//           <CardContent className="p-4">
-//             <div className="flex items-center gap-3">
-//               <div className="p-2 bg-purple-100 rounded-lg">
-//                 <User className="w-5 h-5 text-purple-600" />
-//               </div>
-//               <div>
-//                 <p className="text-2xl font-bold">
-//                   {new Set(students.map(s => s.parent?._id).filter(Boolean)).size}
-//                 </p>
-//                 <p className="text-sm text-gray-600">Parents</p>
-//               </div>
-//             </div>
-//           </CardContent>
-//         </Card>
-
-//         {/* Updated: Show guardian contact count */}
-//         <Card>
-//           <CardContent className="p-4">
-//             <div className="flex items-center gap-3">
-//               <div className="p-2 bg-orange-100 rounded-lg">
-//                 <Phone className="w-5 h-5 text-orange-600" />
-//               </div>
-//               <div>
-//                 <p className="text-2xl font-bold">
-//                   {students.filter(s => s.guardianContact).length}
-//                 </p>
-//                 <p className="text-sm text-gray-600">With Contact</p>
-//               </div>
-//             </div>
-//           </CardContent>
-//         </Card>
-//       </div>
-
-//       {/* Students Table */}
-//       <Card>
-//         <CardHeader>
-//           <div className="flex justify-between items-center">
-//             <div>
-//               <CardTitle>Student Records</CardTitle>
-//               <CardDescription>
-//                 {data?.total || 0} students found • Page {page} of {data?.pages || 1}
-//               </CardDescription>
-//             </div>
-            
-//             {/* Show active filters */}
-//             {Object.keys(searchParams).length > 0 && (
-//               <div className="flex items-center gap-2">
-//                 <span className="text-sm text-gray-500">Active filters:</span>
-//                 <Badge variant="outline" className="text-xs">
-//                   {Object.keys(searchParams).length} active
-//                 </Badge>
-//                 <Button 
-//                   variant="ghost" 
-//                   size="sm" 
-//                   onClick={() => handleSearch({})}
-//                   className="h-6 text-xs"
-//                 >
-//                   Clear All
-//                 </Button>
-//               </div>
-//             )}
-//           </div>
-//         </CardHeader>
-//         <CardContent>
-//           {isLoading ? (
-//             <div className="flex items-center justify-center py-8">
-//               <div className="text-center">
-//                 <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600 mx-auto"></div>
-//                 <p className="mt-2 text-gray-600">Loading students...</p>
-//               </div>
-//             </div>
-//           ) : students.length === 0 ? (
-//             <div className="text-center py-8 text-gray-500">
-//               <User className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-//               <p className="text-lg font-medium">No students found</p>
-//               <p className="text-sm mt-1">
-//                 {Object.keys(searchParams).length > 0 
-//                   ? "Try adjusting your search filters" 
-//                   : "Get started by adding your first student"}
-//               </p>
-//               <Button onClick={handleAddNew} className="mt-4">
-//                 <Plus className="w-4 h-4 mr-2" />
-//                 Add First Student
-//               </Button>
-//             </div>
-//           ) : (
-//             <>
-//               <div className="rounded-md border">
-//                 <Table>
-//                   <TableHeader>
-//                     <TableRow>
-//                       <TableHead className="w-20">Roll No.</TableHead>
-//                       <TableHead>Student Information</TableHead>
-//                       <TableHead className="w-24">Session</TableHead>
-//                       <TableHead className="w-28">Religion</TableHead>
-//                       <TableHead>Class</TableHead>
-//                       <TableHead>Parent</TableHead>
-//                       <TableHead className="w-32">Actions</TableHead>
-//                     </TableRow>
-//                   </TableHeader>
-//                   <TableBody>
-//                     {students.map((student) => (
-//                       <TableRow key={student._id} className="hover:bg-gray-50">
-//                         {/* Roll Number */}
-//                         <TableCell>
-//                           <Badge variant="outline" className="font-mono">
-//                             {student.rollNumber}
-//                           </Badge>
-//                         </TableCell>
-
-//                         {/* Student Information - Updated */}
-//                         <TableCell>
-//                           <div className="flex items-center gap-3">
-//                             <div className="flex-shrink-0">
-//                               <div className="w-8 h-8 bg-blue-100 rounded-full flex items-center justify-center">
-//                                 <User className="w-4 h-4 text-blue-600" />
-//                               </div>
-//                             </div>
-//                             <div className="min-w-0 flex-1">
-//                               <div className="flex items-center justify-evenly gap-3">
-//                                 <p className="font-medium text-sm truncate">
-//                                   {student.name}
-//                                 </p>
-//                                 {student.gender && (
-//                                   <Badge variant="secondary" className="text-xs capitalize text-center">
-//                                     {student.gender}
-//                                   </Badge>
-//                                 )}
-//                                 {student.isPhysicallyDisabled && (
-//                                   <Badge variant="destructive" className="text-xs">
-//                                     Disabled
-//                                   </Badge>
-//                                 )}
-//                               </div>
-//                               <div className="flex items-center justify-evenly gap-3 mt-1 text-xs text-gray-500">
-//                                 {student.guardianContact && (
-//                                   <div className="flex items-center gap-1">
-//                                     <Phone className="w-3 h-3" />
-//                                     <span>{student.guardianContact}</span>
-//                                   </div>
-//                                 )}
-//                                 {student.fathersName && (
-//                                   <span>Father: {student.fathersName}</span>
-//                                 )}
-//                               </div>
-//                             </div>
-//                           </div>
-//                         </TableCell>
-
-//                         {/* Session */}
-//                         <TableCell>
-//                           {student.session ? (
-//                             <Badge variant="outline" className="text-xs">
-//                               {student.session}
-//                             </Badge>
-//                           ) : (
-//                             <span className="text-sm text-gray-400">N/A</span>
-//                           )}
-//                         </TableCell>
-
-//                         {/* Religion */}
-//                         <TableCell>
-//                           {student.religion ? (
-//                             <Badge variant="outline" className="text-xs capitalize">
-//                               {student.religion}
-//                             </Badge>
-//                           ) : (
-//                             <span className="text-sm text-gray-400">-</span>
-//                           )}
-//                         </TableCell>
-
-//                         {/* Class */}
-//                         <TableCell>
-//                           {student.class ? (
-//                             <div className="flex items-center gap-2">
-//                               <BookOpen className="w-4 h-4 text-gray-400" />
-//                               <span className="text-sm">{student.class.name}</span>
-//                             </div>
-//                           ) : (
-//                             <span className="text-sm text-gray-400">No Class</span>
-//                           )}
-//                         </TableCell>
-
-//                         {/* Parent */}
-//                         <TableCell>
-//                           {student.parent ? (
-//                             <div className="space-y-1">
-//                               <div className="flex items-center gap-2">
-//                                 <User className="w-3 h-3 text-gray-400" />
-//                                 <span className="text-sm font-medium">{student.parent.name}</span>
-//                               </div>
-//                               <div className="flex items-center gap-2 text-xs text-gray-500">
-//                                 {student.parent.phone && (
-//                                   <span>{student.parent.phone}</span>
-//                                 )}
-//                                 {student.parent.email && (
-//                                   <span className="flex items-center gap-1">
-//                                     <Mail className="w-3 h-3" />
-//                                     {student.parent.email}
-//                                   </span>
-//                                 )}
-//                               </div>
-//                             </div>
-//                           ) : (
-//                             <span className="text-sm text-gray-400">No Parent</span>
-//                           )}
-//                         </TableCell>
-
-//                         {/* Actions */}
-//                         <TableCell>
-//                           <div className="flex gap-2 text-center">
-//                             <Button
-//                               variant="outline"
-//                               size="sm"
-//                               onClick={() => handleEdit(student)}
-//                               className="h-8 w-8 p-0"
-//                             >
-//                               <Edit className="w-3 h-3" />
-//                             </Button>
-//                             <Button
-//                               variant="destructive"
-//                               size="sm"
-//                               onClick={() => handleDelete(student._id, student.name)}
-//                               className="h-8 w-8 p-0"
-//                             >
-//                               <Trash2 className="w-3 h-3" />
-//                             </Button>
-//                           </div>
-//                         </TableCell>
-//                       </TableRow>
-//                     ))}
-//                   </TableBody>
-//                 </Table>
-//               </div>
-
-//               {/* Pagination */}
-//               <div className="flex items-center justify-between mt-4">
-//                 <div className="text-sm text-gray-500">
-//                   Showing {students.length} of {data?.total || 0} students
-//                 </div>
-//                 <div className="flex gap-2">
-//                   <Button
-//                     variant="outline"
-//                     size="sm"
-//                     onClick={() => setPage(page - 1)}
-//                     disabled={page === 1}
-//                   >
-//                     Previous
-//                   </Button>
-//                   <Button
-//                     variant="outline"
-//                     size="sm"
-//                     onClick={() => setPage(page + 1)}
-//                     disabled={!data?.hasNextPage}
-//                   >
-//                     Next
-//                   </Button>
-//                 </div>
-//               </div>
-//             </>
-//           )}
-//         </CardContent>
-//       </Card>
-
-//       {/* Student Dialog Form */}
-//       <StudentDialogForm
-//         open={isDialogOpen}
-//         onOpenChange={handleDialogOpenChange}
-//         initialData={editingStudent}
-//         onSaved={handleSaved}
-//         classes={classes}
-//       />
-//     </div>
-//   );
-// }

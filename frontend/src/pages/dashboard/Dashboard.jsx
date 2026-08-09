@@ -11,14 +11,78 @@ import { useGetAdminDashboardQuery } from '@/features/apis/api'
 const Dashboard = () => {
     const navigate = useNavigate();
     const user = useAppSelector((state) => state.user);
+    const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
     const { data: dashboardData, isLoading, error } = useGetAdminDashboardQuery();
+
+    // Theme-based classes
+    const theme = {
+        textPrimary: isDarkMode ? "text-white" : "text-gray-900",
+        textSecondary: isDarkMode ? "text-gray-300" : "text-gray-700",
+        textMuted: isDarkMode ? "text-gray-400" : "text-gray-500",
+        textLight: isDarkMode ? "text-gray-500" : "text-gray-400",
+        border: isDarkMode ? "border-gray-700" : "border-gray-200",
+        bgCard: isDarkMode ? "bg-gray-900/50" : "bg-white",
+        bgHover: isDarkMode ? "hover:bg-gray-800/50" : "hover:shadow-lg",
+        bgInput: isDarkMode ? "bg-gray-800" : "bg-white",
+        inputBorder: isDarkMode ? "border-gray-700" : "border-gray-200",
+        cardIcon: {
+            blue: isDarkMode ? "bg-blue-500/20 text-blue-400" : "bg-blue-100 text-blue-600",
+            green: isDarkMode ? "bg-emerald-500/20 text-emerald-400" : "bg-green-100 text-green-600",
+            purple: isDarkMode ? "bg-purple-500/20 text-purple-400" : "bg-purple-100 text-purple-600",
+            orange: isDarkMode ? "bg-orange-500/20 text-orange-400" : "bg-orange-100 text-orange-600",
+        },
+        stat: {
+            green: isDarkMode 
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                : "bg-green-50 text-green-800",
+            red: isDarkMode 
+                ? "bg-red-500/10 border-red-500/20 text-red-400" 
+                : "bg-red-50 text-red-800",
+        },
+        alert: {
+            yellow: isDarkMode 
+                ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-400" 
+                : "bg-yellow-50 border-yellow-200 text-yellow-800",
+            blue: isDarkMode 
+                ? "bg-blue-500/10 border-blue-500/20 text-blue-400" 
+                : "bg-blue-50 border-blue-200 text-blue-800",
+            green: isDarkMode 
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+                : "bg-green-50 border-green-200 text-green-800",
+            gray: isDarkMode 
+                ? "bg-gray-800/50 border-gray-700 text-gray-300" 
+                : "bg-gray-50 border-gray-200 text-gray-800",
+        },
+        paymentItem: isDarkMode 
+            ? "border-gray-700" 
+            : "border-gray-200",
+        progress: {
+            bg: isDarkMode ? "bg-gray-700" : "bg-gray-200",
+            green: "bg-emerald-500",
+            red: "bg-red-500",
+            yellow: "bg-yellow-500",
+            orange: "bg-orange-500",
+        },
+        button: {
+            outline: isDarkMode 
+                ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" 
+                : "border-gray-200 text-gray-700 hover:bg-gray-50",
+            primary: isDarkMode 
+                ? "bg-blue-600 hover:bg-blue-700 text-white" 
+                : "bg-blue-600 hover:bg-blue-700 text-white",
+        },
+        portalCard: isDarkMode 
+            ? "bg-gray-800/50 border-gray-700 hover:border-gray-600" 
+            : "bg-white border-gray-200 hover:shadow-lg",
+        loading: isDarkMode ? "border-blue-400" : "border-blue-600",
+    };
 
     if (isLoading) {
         return (
-            <div className="flex items-center justify-center min-h-96">
+            <div className={`flex items-center justify-center min-h-96 ${isDarkMode ? "text-gray-400" : ""}`}>
                 <div className="text-center">
-                    <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600 mx-auto"></div>
-                    <p className="mt-4 text-gray-600">Loading dashboard...</p>
+                    <div className={`animate-spin rounded-full h-12 w-12 border-b-2 ${theme.loading} mx-auto`}></div>
+                    <p className={`mt-4 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>Loading dashboard...</p>
                 </div>
             </div>
         );
@@ -26,8 +90,8 @@ const Dashboard = () => {
 
     if (error) {
         return (
-            <div className="flex items-center justify-center min-h-96">
-                <div className="text-center text-red-600">
+            <div className={`flex items-center justify-center min-h-96 ${isDarkMode ? "text-red-400" : "text-red-600"}`}>
+                <div className="text-center">
                     <AlertCircle className="w-12 h-12 mx-auto mb-4" />
                     <p>Failed to load dashboard data</p>
                 </div>
@@ -42,72 +106,94 @@ const Dashboard = () => {
     const getPercentage = (count) => totalTodayAttendance > 0 ? (count / totalTodayAttendance) * 100 : 0;
 
     return (
-        <div className="space-y-6">
+        <div className={`space-y-6 ${isDarkMode ? "text-white" : ""}`}>
             {/* Header */}
-            <div className="flex justify-between items-center">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
                 <div>
-                    <h1 className="text-3xl font-bold">School Overview</h1>
-                    <p className="text-gray-600 mt-2">Welcome back, {user.user?.name}. Here's your school's performance summary.</p>
+                    <h1 className={`text-3xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                        School Overview
+                    </h1>
+                    <p className={`mt-2 ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                        Welcome back, {user.user?.name}. Here's your school's performance summary.
+                    </p>
                 </div>
                 <div className="text-right">
-                    <p className="text-sm text-gray-500">Today</p>
-                    <p className="font-semibold">{new Date().toLocaleDateString()}</p>
+                    <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>Today</p>
+                    <p className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                        {new Date().toLocaleDateString()}
+                    </p>
                 </div>
             </div>
 
             {/* Key Metrics */}
             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-100 rounded-lg">
-                                <Users className="w-6 h-6 text-blue-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.blue}`}>
+                                <Users className="w-6 h-6" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{dashboard.totalStudents || 0}</p>
-                                <p className="text-sm text-gray-600">Total Students</p>
+                                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    {dashboard.totalStudents || 0}
+                                </p>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    Total Students
+                                </p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-green-100 rounded-lg">
-                                <GraduationCap className="w-6 h-6 text-green-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.green}`}>
+                                <GraduationCap className="w-6 h-6" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{dashboard.totalTeachers || 0}</p>
-                                <p className="text-sm text-gray-600">Teachers</p>
+                                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    {dashboard.totalTeachers || 0}
+                                </p>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    Teachers
+                                </p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-purple-100 rounded-lg">
-                                <BookOpen className="w-6 h-6 text-purple-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.purple}`}>
+                                <BookOpen className="w-6 h-6" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{dashboard.totalClasses || 0}</p>
-                                <p className="text-sm text-gray-600">Classes</p>
+                                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    {dashboard.totalClasses || 0}
+                                </p>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    Classes
+                                </p>
                             </div>
                         </div>
                     </CardContent>
                 </Card>
 
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-orange-100 rounded-lg">
-                                <TrendingUp className="w-6 h-6 text-orange-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.orange}`}>
+                                <TrendingUp className="w-6 h-6" />
                             </div>
                             <div>
-                                <p className="text-2xl font-bold">{dashboard.attendanceRate || 0}%</p>
-                                <p className="text-sm text-gray-600">Attendance Rate</p>
+                                <p className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    {dashboard.attendanceRate || 0}%
+                                </p>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    Attendance Rate
+                                </p>
                             </div>
                         </div>
                     </CardContent>
@@ -117,31 +203,39 @@ const Dashboard = () => {
             {/* Financial & Today's Attendance */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Financial Overview */}
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                             <DollarSign className="w-5 h-5" />
                             Financial Overview
                         </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="space-y-4">
-                            <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
+                            <div className={`flex justify-between items-center p-3 rounded-lg border ${theme.stat.green}`}>
                                 <div>
-                                    <p className="font-semibold text-green-800">Monthly Revenue</p>
-                                    <p className="text-sm text-green-600">This month</p>
+                                    <p className={`font-semibold ${isDarkMode ? "text-emerald-400" : "text-green-800"}`}>
+                                        Monthly Revenue
+                                    </p>
+                                    <p className={`text-sm ${isDarkMode ? "text-emerald-400/80" : "text-green-600"}`}>
+                                        This month
+                                    </p>
                                 </div>
-                                <p className="text-2xl font-bold text-green-800">
+                                <p className={`text-2xl font-bold ${isDarkMode ? "text-emerald-400" : "text-green-800"}`}>
                                     ${(dashboard.financial?.monthlyRevenue || 0).toLocaleString()}
                                 </p>
                             </div>
 
-                            <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
+                            <div className={`flex justify-between items-center p-3 rounded-lg border ${theme.stat.red}`}>
                                 <div>
-                                    <p className="font-semibold text-red-800">Pending Fees</p>
-                                    <p className="text-sm text-red-600">To be collected</p>
+                                    <p className={`font-semibold ${isDarkMode ? "text-red-400" : "text-red-800"}`}>
+                                        Pending Fees
+                                    </p>
+                                    <p className={`text-sm ${isDarkMode ? "text-red-400/80" : "text-red-600"}`}>
+                                        To be collected
+                                    </p>
                                 </div>
-                                <p className="text-2xl font-bold text-red-800">
+                                <p className={`text-2xl font-bold ${isDarkMode ? "text-red-400" : "text-red-800"}`}>
                                     ${(dashboard.financial?.pendingFees || 0).toLocaleString()}
                                 </p>
                             </div>
@@ -150,17 +244,25 @@ const Dashboard = () => {
                         {/* Recent Payments */}
                         {dashboard.recentPayments && dashboard.recentPayments.length > 0 && (
                             <div className="mt-6">
-                                <h4 className="font-semibold mb-3 text-sm text-gray-700">Recent Payments</h4>
+                                <h4 className={`font-semibold mb-3 text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
+                                    Recent Payments
+                                </h4>
                                 <div className="space-y-2">
                                     {dashboard.recentPayments.slice(0, 3).map((payment) => (
-                                        <div key={payment._id} className="flex justify-between items-center text-sm p-2 border rounded">
+                                        <div key={payment._id} className={`flex justify-between items-center text-sm p-2 border rounded ${theme.paymentItem}`}>
                                             <div>
-                                                <p className="font-medium">{payment.student.name}</p>
-                                                <p className="text-gray-500 text-xs">{payment.class.name}</p>
+                                                <p className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                                    {payment.student.name}
+                                                </p>
+                                                <p className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
+                                                    {payment.class.name}
+                                                </p>
                                             </div>
                                             <div className="text-right">
-                                                <p className="font-bold text-green-600">${payment.paidAmount}</p>
-                                                <Badge variant="outline" className="text-xs">
+                                                <p className={`font-bold ${isDarkMode ? "text-emerald-400" : "text-green-600"}`}>
+                                                    ${payment.paidAmount}
+                                                </p>
+                                                <Badge variant="outline" className={`text-xs ${isDarkMode ? "border-gray-700 text-gray-300" : ""}`}>
                                                     {payment.status}
                                                 </Badge>
                                             </div>
@@ -173,9 +275,9 @@ const Dashboard = () => {
                 </Card>
 
                 {/* Today's Attendance */}
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                             <Calendar className="w-5 h-5" />
                             Today's Attendance
                         </CardTitle>
@@ -183,14 +285,14 @@ const Dashboard = () => {
                     <CardContent>
                         <div className="space-y-3">
                             <div className="flex justify-between items-center">
-                                <span className="text-sm">Present</span>
+                                <span className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>Present</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-green-600">
+                                    <span className={`font-bold ${isDarkMode ? "text-emerald-400" : "text-green-600"}`}>
                                         {dashboard.todayAttendance?.present || 0}
                                     </span>
-                                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
                                         <div 
-                                            className="bg-green-500 h-2 rounded-full transition-all duration-500"
+                                            className={`${theme.progress.green} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.present || 0)}%` }}
                                         ></div>
                                     </div>
@@ -198,14 +300,14 @@ const Dashboard = () => {
                             </div>
 
                             <div className="flex justify-between items-center">
-                                <span className="text-sm">Absent</span>
+                                <span className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>Absent</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-red-600">
+                                    <span className={`font-bold ${isDarkMode ? "text-red-400" : "text-red-600"}`}>
                                         {dashboard.todayAttendance?.absent || 0}
                                     </span>
-                                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
                                         <div 
-                                            className="bg-red-500 h-2 rounded-full transition-all duration-500"
+                                            className={`${theme.progress.red} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.absent || 0)}%` }}
                                         ></div>
                                     </div>
@@ -213,14 +315,14 @@ const Dashboard = () => {
                             </div>
 
                             <div className="flex justify-between items-center">
-                                <span className="text-sm">Late</span>
+                                <span className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>Late</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-yellow-600">
+                                    <span className={`font-bold ${isDarkMode ? "text-yellow-400" : "text-yellow-600"}`}>
                                         {dashboard.todayAttendance?.late || 0}
                                     </span>
-                                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
                                         <div 
-                                            className="bg-yellow-500 h-2 rounded-full transition-all duration-500"
+                                            className={`${theme.progress.yellow} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.late || 0)}%` }}
                                         ></div>
                                     </div>
@@ -228,14 +330,14 @@ const Dashboard = () => {
                             </div>
 
                             <div className="flex justify-between items-center">
-                                <span className="text-sm">Half Day</span>
+                                <span className={`text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>Half Day</span>
                                 <div className="flex items-center gap-2">
-                                    <span className="font-bold text-orange-600">
+                                    <span className={`font-bold ${isDarkMode ? "text-orange-400" : "text-orange-600"}`}>
                                         {dashboard.todayAttendance?.half_day || 0}
                                     </span>
-                                    <div className="w-20 bg-gray-200 rounded-full h-2">
+                                    <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
                                         <div 
-                                            className="bg-orange-500 h-2 rounded-full transition-all duration-500"
+                                            className={`${theme.progress.orange} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.half_day || 0)}%` }}
                                         ></div>
                                     </div>
@@ -243,10 +345,12 @@ const Dashboard = () => {
                             </div>
 
                             {/* Total Summary */}
-                            <div className="pt-3 border-t">
-                                <div className="flex justify-between items-center text-sm">
+                            <div className={`pt-3 border-t ${isDarkMode ? "border-gray-700" : "border-gray-200"}`}>
+                                <div className={`flex justify-between items-center text-sm ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
                                     <span className="font-medium">Total Records Today:</span>
-                                    <span className="font-bold">{totalTodayAttendance}</span>
+                                    <span className={`font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                        {totalTodayAttendance}
+                                    </span>
                                 </div>
                             </div>
                         </div>
@@ -257,9 +361,9 @@ const Dashboard = () => {
             {/* Alerts & Quick Actions */}
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Alerts */}
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardHeader>
-                        <CardTitle className="flex items-center gap-2">
+                        <CardTitle className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
                             <AlertCircle className="w-5 h-5" />
                             Important Alerts
                         </CardTitle>
@@ -267,10 +371,10 @@ const Dashboard = () => {
                     <CardContent>
                         <div className="space-y-3">
                             {(dashboard.alerts?.lowAttendanceClasses || 0) > 0 && (
-                                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                                <div className={`p-3 border rounded-lg ${theme.alert.yellow}`}>
                                     <div className="flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-yellow-600" />
-                                        <span className="font-medium text-yellow-800">
+                                        <AlertCircle className="w-4 h-4" />
+                                        <span className="font-medium">
                                             {dashboard.alerts.lowAttendanceClasses} classes have low attendance (&lt;75%)
                                         </span>
                                     </div>
@@ -278,10 +382,10 @@ const Dashboard = () => {
                             )}
 
                             {(dashboard.alerts?.upcomingEvents || 0) > 0 && (
-                                <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                                <div className={`p-3 border rounded-lg ${theme.alert.blue}`}>
                                     <div className="flex items-center gap-2">
-                                        <Calendar className="w-4 h-4 text-blue-600" />
-                                        <span className="font-medium text-blue-800">
+                                        <Calendar className="w-4 h-4" />
+                                        <span className="font-medium">
                                             {dashboard.alerts.upcomingEvents} upcoming events this week
                                         </span>
                                     </div>
@@ -289,10 +393,10 @@ const Dashboard = () => {
                             )}
 
                             {dashboard.alerts?.feeCollection && (
-                                <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
+                                <div className={`p-3 border rounded-lg ${theme.alert.green}`}>
                                     <div className="flex items-center gap-2">
-                                        <DollarSign className="w-4 h-4 text-green-600" />
-                                        <span className="font-medium text-green-800">
+                                        <DollarSign className="w-4 h-4" />
+                                        <span className="font-medium">
                                             ${(dashboard.financial?.pendingFees || 0).toLocaleString()} in pending fees
                                         </span>
                                     </div>
@@ -301,10 +405,10 @@ const Dashboard = () => {
 
                             {/* Default alert if no specific alerts */}
                             {(!dashboard.alerts?.lowAttendanceClasses && !dashboard.alerts?.upcomingEvents && !dashboard.alerts?.feeCollection) && (
-                                <div className="p-3 bg-gray-50 border border-gray-200 rounded-lg">
+                                <div className={`p-3 border rounded-lg ${theme.alert.gray}`}>
                                     <div className="flex items-center gap-2">
-                                        <AlertCircle className="w-4 h-4 text-gray-600" />
-                                        <span className="font-medium text-gray-800">
+                                        <AlertCircle className="w-4 h-4" />
+                                        <span className="font-medium">
                                             All systems operational. No critical alerts.
                                         </span>
                                     </div>
@@ -315,31 +419,33 @@ const Dashboard = () => {
                 </Card>
 
                 {/* Quick Actions */}
-                <Card>
+                <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardHeader>
-                        <CardTitle>Quick Actions</CardTitle>
+                        <CardTitle className={isDarkMode ? "text-white" : "text-gray-900"}>
+                            Quick Actions
+                        </CardTitle>
                     </CardHeader>
                     <CardContent>
                         <div className="grid grid-cols-2 gap-4">
-                            <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
+                            <Button variant="outline" className={`flex flex-col items-center gap-2 h-auto py-4 ${theme.button.outline}`}
                                 onClick={() => navigate("/admin/students")}>
                                 <Users className="w-6 h-6" />
                                 <span>Manage Students</span>
                             </Button>
 
-                            <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
+                            <Button variant="outline" className={`flex flex-col items-center gap-2 h-auto py-4 ${theme.button.outline}`}
                                 onClick={() => navigate("/admin/teachers")}>
                                 <GraduationCap className="w-6 h-6" />
                                 <span>Manage Teachers</span>
                             </Button>
 
-                            <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
+                            <Button variant="outline" className={`flex flex-col items-center gap-2 h-auto py-4 ${theme.button.outline}`}
                                 onClick={() => navigate("/admin/attendances")}>
                                 <BarChart3 className="w-6 h-6" />
                                 <span>View Reports</span>
                             </Button>
 
-                            <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
+                            <Button variant="outline" className={`flex flex-col items-center gap-2 h-auto py-4 ${theme.button.outline}`}
                                 onClick={() => navigate("/finance")}>
                                 <DollarSign className="w-6 h-6" />
                                 <span>Finance</span>
@@ -352,54 +458,66 @@ const Dashboard = () => {
             {/* Portal Access Cards */}
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {/* Teacher Portal Card */}
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+                <Card className={`cursor-pointer transition-all ${theme.portalCard}`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-blue-100 rounded-lg">
-                                <Users className="w-6 h-6 text-blue-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.blue}`}>
+                                <Users className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="font-semibold">Teacher Portal</h3>
-                                <p className="text-sm text-gray-600">Access your teaching dashboard</p>
+                                <h3 className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    Teacher Portal
+                                </h3>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    Access your teaching dashboard
+                                </p>
                             </div>
                         </div>
-                        <Button className="w-full mt-4" onClick={() => navigate("/teacher")}>
+                        <Button className={`w-full mt-4 ${theme.button.primary}`} onClick={() => navigate("/teacher")}>
                             Go to Teacher Portal
                         </Button>
                     </CardContent>
                 </Card>
 
                 {/* Student Portal Card */}
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+                <Card className={`cursor-pointer transition-all ${theme.portalCard}`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-green-100 rounded-lg">
-                                <GraduationCap className="w-6 h-6 text-green-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.green}`}>
+                                <GraduationCap className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="font-semibold">Student Portal</h3>
-                                <p className="text-sm text-gray-600">View student dashboard</p>
+                                <h3 className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    Student Portal
+                                </h3>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    View student dashboard
+                                </p>
                             </div>
                         </div>
-                        <Button className="w-full mt-4" onClick={() => navigate("/student")}>
+                        <Button className={`w-full mt-4 ${theme.button.primary}`} onClick={() => navigate("/student")}>
                             Go to Student Portal
                         </Button>
                     </CardContent>
                 </Card>
 
                 {/* Parent Portal Card */}
-                <Card className="cursor-pointer hover:shadow-lg transition-shadow">
+                <Card className={`cursor-pointer transition-all ${theme.portalCard}`}>
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
-                            <div className="p-3 bg-purple-100 rounded-lg">
-                                <Users className="w-6 h-6 text-purple-600" />
+                            <div className={`p-3 rounded-lg border ${theme.cardIcon.purple}`}>
+                                <Users className="w-6 h-6" />
                             </div>
                             <div>
-                                <h3 className="font-semibold">Parent Portal</h3>
-                                <p className="text-sm text-gray-600">Monitor children's progress</p>
+                                <h3 className={`font-semibold ${isDarkMode ? "text-white" : "text-gray-900"}`}>
+                                    Parent Portal
+                                </h3>
+                                <p className={`text-sm ${isDarkMode ? "text-gray-400" : "text-gray-600"}`}>
+                                    Monitor children's progress
+                                </p>
                             </div>
                         </div>
-                        <Button className="w-full mt-4" onClick={() => navigate("/parent")}>
+                        <Button className={`w-full mt-4 ${theme.button.primary}`} onClick={() => navigate("/parent")}>
                             Go to Parent Portal
                         </Button>
                     </CardContent>
@@ -410,357 +528,3 @@ const Dashboard = () => {
 }
 
 export default Dashboard
-
-// import { Button } from '@/components/ui/button'
-// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-// import { useAppSelector } from '@/features/store'
-// import { Users, BookOpen, GraduationCap, TrendingUp, Calendar, DollarSign, AlertCircle, BarChart3 } from 'lucide-react'
-// import React from 'react'
-// import { useNavigate } from 'react-router-dom'
-// // In your main Dashboard component, add finance cards:
-// // import { useGetPaymentsSummaryQuery } from "@/features/apis/financeApi";
-
-// const Dashboard = () => {
-//     const navigate = useNavigate();
-//     const user = useAppSelector((state) => state.user);
-
-//     // Inside your Dashboard component:
-//     // const { data: financeData } = useGetPaymentsSummaryQuery();
-//     let financeData = null; // Placeholder
-    
-//     // Mock data - replace with actual API calls
-//     const dashboardData = {
-//         totalStudents: 1247,
-//         totalTeachers: 48,
-//         totalClasses: 36,
-//         totalSubjects: 12,
-//         monthlyRevenue: 125000,
-//         attendanceRate: 94.2,
-//         pendingFees: 23450,
-//         upcomingEvents: 3,
-//         lowAttendanceClasses: 2,
-//         todayAttendance: {
-//             present: 1150,
-//             absent: 67,
-//             late: 25,
-//             halfDay: 5
-//         }
-//     };
-
-//     return (
-//         <div className="space-y-6">
-//             {/* Header */}
-//             <div className="flex justify-between items-center">
-//                 <div>
-//                     <h1 className="text-3xl font-bold">School Overview</h1>
-//                     <p className="text-gray-600 mt-2">Welcome back, {user.user?.name}. Here's your school's performance summary.</p>
-//                 </div>
-//                 <div className="text-right">
-//                     <p className="text-sm text-gray-500">Today</p>
-//                     <p className="font-semibold">{new Date().toLocaleDateString()}</p>
-//                 </div>
-//             </div>
-
-//             {/* Key Metrics */}
-//             <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-//                 <Card>
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-blue-100 rounded-lg">
-//                                 <Users className="w-6 h-6 text-blue-600" />
-//                             </div>
-//                             <div>
-//                                 <p className="text-2xl font-bold">{dashboardData.totalStudents}</p>
-//                                 <p className="text-sm text-gray-600">Total Students</p>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-
-//                 <Card>
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-green-100 rounded-lg">
-//                                 <GraduationCap className="w-6 h-6 text-green-600" />
-//                             </div>
-//                             <div>
-//                                 <p className="text-2xl font-bold">{dashboardData.totalTeachers}</p>
-//                                 <p className="text-sm text-gray-600">Teachers</p>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-
-//                 <Card>
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-purple-100 rounded-lg">
-//                                 <BookOpen className="w-6 h-6 text-purple-600" />
-//                             </div>
-//                             <div>
-//                                 <p className="text-2xl font-bold">{dashboardData.totalClasses}</p>
-//                                 <p className="text-sm text-gray-600">Classes</p>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-
-//                 <Card>
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-orange-100 rounded-lg">
-//                                 <TrendingUp className="w-6 h-6 text-orange-600" />
-//                             </div>
-//                             <div>
-//                                 <p className="text-2xl font-bold">{dashboardData.attendanceRate}%</p>
-//                                 <p className="text-sm text-gray-600">Attendance Rate</p>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-//             </div>
-
-//             {/* Financial & Today's Attendance */}
-//             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-//                 {/* Financial Overview */}
-//                 <Card>
-//                     <CardHeader>
-//                         <CardTitle className="flex items-center gap-2">
-//                             <DollarSign className="w-5 h-5" />
-//                             Financial Overview
-//                         </CardTitle>
-//                     </CardHeader>
-//                     <CardContent>
-//                         <div className="space-y-4">
-//                             <div className="flex justify-between items-center p-3 bg-green-50 rounded-lg">
-//                                 <div>
-//                                     <p className="font-semibold text-green-800">Monthly Revenue</p>
-//                                     <p className="text-sm text-green-600">This month</p>
-//                                 </div>
-//                                 <p className="text-2xl font-bold text-green-800">
-//                                     ${financeData?.summary?.monthlyRevenue?.toLocaleString() || 0}
-//                                 </p>
-//                             </div>
-
-//                             <div className="flex justify-between items-center p-3 bg-red-50 rounded-lg">
-//                                 <div>
-//                                     <p className="font-semibold text-red-800">Pending Fees</p>
-//                                     <p className="text-sm text-red-600">To be collected</p>
-//                                 </div>
-//                                 <p className="text-2xl font-bold text-red-800">
-//                                     ${financeData?.summary?.pendingFees?.toLocaleString() || 0}
-//                                 </p>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-
-//                     {/* <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-green-100 rounded-lg">
-//                                 <DollarSign className="w-6 h-6 text-green-600" />
-//                             </div>
-//                             <div>
-//                                 <p className="text-2xl font-bold">
-//                                     ${financeData?.summary?.monthlyRevenue?.toLocaleString() || 0}
-//                                 </p>
-//                                 <p className="text-sm text-gray-600">Monthly Revenue</p>
-//                             </div>
-//                         </div>
-//                     </CardContent> */}
-
-//                 </Card>
-
-//                 {/* Today's Attendance */}
-//                 <Card>
-//                     <CardHeader>
-//                         <CardTitle className="flex items-center gap-2">
-//                             <Calendar className="w-5 h-5" />
-//                             Today's Attendance
-//                         </CardTitle>
-//                     </CardHeader>
-//                     <CardContent>
-//                         <div className="space-y-3">
-//                             <div className="flex justify-between items-center">
-//                                 <span className="text-sm">Present</span>
-//                                 <div className="flex items-center gap-2">
-//                                     <span className="font-bold text-green-600">{dashboardData.todayAttendance.present}</span>
-//                                     <div className="w-20 bg-gray-200 rounded-full h-2">
-//                                         <div className="bg-green-500 h-2 rounded-full" style={{ width: '85%' }}></div>
-//                                     </div>
-//                                 </div>
-//                             </div>
-
-//                             <div className="flex justify-between items-center">
-//                                 <span className="text-sm">Absent</span>
-//                                 <div className="flex items-center gap-2">
-//                                     <span className="font-bold text-red-600">{dashboardData.todayAttendance.absent}</span>
-//                                     <div className="w-20 bg-gray-200 rounded-full h-2">
-//                                         <div className="bg-red-500 h-2 rounded-full" style={{ width: '5%' }}></div>
-//                                     </div>
-//                                 </div>
-//                             </div>
-
-//                             <div className="flex justify-between items-center">
-//                                 <span className="text-sm">Late</span>
-//                                 <div className="flex items-center gap-2">
-//                                     <span className="font-bold text-yellow-600">{dashboardData.todayAttendance.late}</span>
-//                                     <div className="w-20 bg-gray-200 rounded-full h-2">
-//                                         <div className="bg-yellow-500 h-2 rounded-full" style={{ width: '2%' }}></div>
-//                                     </div>
-//                                 </div>
-//                             </div>
-
-//                             <div className="flex justify-between items-center">
-//                                 <span className="text-sm">Half Day</span>
-//                                 <div className="flex items-center gap-2">
-//                                     <span className="font-bold text-orange-600">{dashboardData.todayAttendance.halfDay}</span>
-//                                     <div className="w-20 bg-gray-200 rounded-full h-2">
-//                                         <div className="bg-orange-500 h-2 rounded-full" style={{ width: '0.5%' }}></div>
-//                                     </div>
-//                                 </div>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-//             </div>
-
-//             {/* Alerts & Quick Actions */}
-//             <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-//                 {/* Alerts */}
-//                 <Card>
-//                     <CardHeader>
-//                         <CardTitle className="flex items-center gap-2">
-//                             <AlertCircle className="w-5 h-5" />
-//                             Important Alerts
-//                         </CardTitle>
-//                     </CardHeader>
-//                     <CardContent>
-//                         <div className="space-y-3">
-//                             {dashboardData.lowAttendanceClasses > 0 && (
-//                                 <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
-//                                     <div className="flex items-center gap-2">
-//                                         <AlertCircle className="w-4 h-4 text-yellow-600" />
-//                                         <span className="font-medium text-yellow-800">
-//                                             {dashboardData.lowAttendanceClasses} classes have low attendance
-//                                         </span>
-//                                     </div>
-//                                 </div>
-//                             )}
-
-//                             <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-//                                 <div className="flex items-center gap-2">
-//                                     <Calendar className="w-4 h-4 text-blue-600" />
-//                                     <span className="font-medium text-blue-800">
-//                                         {dashboardData.upcomingEvents} upcoming events this week
-//                                     </span>
-//                                 </div>
-//                             </div>
-
-//                             <div className="p-3 bg-green-50 border border-green-200 rounded-lg">
-//                                 <div className="flex items-center gap-2">
-//                                     <DollarSign className="w-4 h-4 text-green-600" />
-//                                     <span className="font-medium text-green-800">
-//                                         Fee collection drive starts next week
-//                                     </span>
-//                                 </div>
-//                             </div>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-
-//                 {/* Quick Actions */}
-//                 <Card>
-//                     <CardHeader>
-//                         <CardTitle>Quick Actions</CardTitle>
-//                     </CardHeader>
-//                     <CardContent>
-//                         <div className="grid grid-cols-2 gap-4">
-//                             <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
-//                                 onClick={() => navigate("/students")}>
-//                                 <Users className="w-6 h-6" />
-//                                 <span>Manage Students</span>
-//                             </Button>
-
-//                             <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
-//                                 onClick={() => navigate("/teachers")}>
-//                                 <GraduationCap className="w-6 h-6" />
-//                                 <span>Manage Teachers</span>
-//                             </Button>
-
-//                             <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
-//                                 onClick={() => navigate("/attendances")}>
-//                                 <BarChart3 className="w-6 h-6" />
-//                                 <span>View Reports</span>
-//                             </Button>
-
-//                             <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4"
-//                                 onClick={() => navigate("/finance")}>
-//                                 <DollarSign className="w-6 h-6" />
-//                                 <span>Finance</span>
-//                             </Button>
-//                         </div>
-//                     </CardContent>
-//                 </Card>
-//             </div>
-
-//             {/* Portal Access Cards */}
-//             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-//                 {/* Teacher Portal Card */}
-//                 <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-blue-100 rounded-lg">
-//                                 <Users className="w-6 h-6 text-blue-600" />
-//                             </div>
-//                             <div>
-//                                 <h3 className="font-semibold">Teacher Portal</h3>
-//                                 <p className="text-sm text-gray-600">Access your teaching dashboard</p>
-//                             </div>
-//                         </div>
-//                         <Button className="w-full mt-4" onClick={() => navigate("/teacher")}>
-//                             Go to Teacher Portal
-//                         </Button>
-//                     </CardContent>
-//                 </Card>
-
-//                 {/* Student Portal Card */}
-//                 <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-green-100 rounded-lg">
-//                                 <GraduationCap className="w-6 h-6 text-green-600" />
-//                             </div>
-//                             <div>
-//                                 <h3 className="font-semibold">Student Portal</h3>
-//                                 <p className="text-sm text-gray-600">View student dashboard</p>
-//                             </div>
-//                         </div>
-//                         <Button className="w-full mt-4" onClick={() => navigate("/student")}>
-//                             Go to Student Portal
-//                         </Button>
-//                     </CardContent>
-//                 </Card>
-
-//                 {/* Parent Portal Card */}
-//                 <Card className="cursor-pointer hover:shadow-lg transition-shadow">
-//                     <CardContent className="p-6">
-//                         <div className="flex items-center gap-4">
-//                             <div className="p-3 bg-purple-100 rounded-lg">
-//                                 <Users className="w-6 h-6 text-purple-600" />
-//                             </div>
-//                             <div>
-//                                 <h3 className="font-semibold">Parent Portal</h3>
-//                                 <p className="text-sm text-gray-600">Monitor children's progress</p>
-//                             </div>
-//                         </div>
-//                         <Button className="w-full mt-4" onClick={() => navigate("/parent")}>
-//                             Go to Parent Portal
-//                         </Button>
-//                     </CardContent>
-//                 </Card>
-//             </div>
-//         </div>
-//     )
-// }
-
-// export default Dashboard

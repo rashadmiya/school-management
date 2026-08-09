@@ -2,22 +2,145 @@
 import { Button } from "@/components/ui/button";
 import { useLogOutMutation, useMeQuery } from "@/features/apis/authApi";
 import { useGetAllPagesQuery, useGetPublicSettingsQuery } from "@/features/apis/publicApi";
-import { useAppDispatch } from "@/features/store";
-import { Menu, X, User, LogOut, Home, Bell, Users, LayoutDashboard, ChevronDown, GraduationCap, StepForward, Club, IdCard, PenBox, GalleryHorizontal } from "lucide-react";
-import { useState, useEffect, useRef } from "react";
-import { Link, useNavigate, useLocation } from "react-router-dom";
 import { userLoggedOut } from "@/features/slices/authSlice";
-import { motion, AnimatePresence } from "framer-motion";
+import { useAppDispatch, useAppSelector } from "@/features/store";
+import { AnimatePresence, motion } from "framer-motion";
+import {
+    Bell,
+    BookOpen,
+    Briefcase,
+    ChevronDown,
+    ChevronRight,
+    Club,
+    FlaskConical,
+    GalleryHorizontal,
+    Grid,
+    GitBranch,
+    GraduationCap, // Gallery
+    Info,
+    LayoutDashboard,
+    ListChecks,
+    LogOut,
+    Menu,
+    Mic,
+    Sparkles,
+    UserRound,
+    Users,
+    UsersRound,
+    X,
+    Sun,
+    Moon
+} from "lucide-react";
+import { useEffect, useRef, useState } from "react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import schoolLogo from "../../assets/appayan-sm-2.png";
+import { setIsSidebarCollapsed, setIsDarkMode } from "@/features/globalReducer";
+
+// ----- Navigation structure -----
+// const NAV_ITEMS = [
+//     {
+//         label: "Administration",
+//         icon: Users, // Changed from Building
+//         children: [
+//             { label: "Governing Body", path: "/administration/governing-body", icon: UsersRound },
+//             { label: "Teachers List", path: "/administration/teachers", icon: UserRound },
+//             { label: "Staff Information", path: "/administration/staff", icon: Briefcase },
+//         ],
+//     },
+//     {
+//         label: "Classes",
+//         icon: BookOpen, // Changed from StepForward
+//         children: [
+//             { label: "Class List", path: "/classes/list", icon: ListChecks },
+//         ],
+//     },
+//     {
+//         label: "Clubs",
+//         icon: Club, // Keep this - appropriate
+//         children: [
+//             { label: "Cultural Clubs", path: "/clubs/cultural", icon: Sparkles },
+//             { label: "Science Club", path: "/clubs/science", icon: FlaskConical },
+//             { label: "Language Club", path: "/clubs/language", icon: Mic },
+//             { label: "Debate Club", path: "/clubs/debate", icon: GitBranch },
+//         ],
+//     },
+//     {
+//         label: "Notices",
+//         path: "/announcements",
+//         icon: Bell, // Keep - perfect
+//     },
+//     {
+//         label: "Gallery",
+//         path: "/gallery",
+//         icon: Grid, // Keep - perfect
+//     },
+//     {
+//         label: "About Us",
+//         path: "/about",
+//         icon: Info, // Changed from PenBox
+//     },
+// ];
+// In PublicHeader.jsx
+// In PublicHeader.jsx
+// In PublicHeader.jsx
+const NAV_ITEMS = [
+    {
+        label: "Administration",
+        icon: Users,
+        children: [
+            { label: "Governing Body", path: "/administration/governing-body", icon: UsersRound },
+            { label: "Teachers List", path: "/administration/teachers", icon: UserRound },
+            { label: "Staff Information", path: "/administration/staff", icon: Briefcase },
+        ],
+    },
+    {
+        label: "Classes",
+        icon: BookOpen,
+        children: [
+            { label: "Class List", path: "/classes", icon: ListChecks },
+        ],
+    },
+    {
+        label: "Clubs",
+        icon: Club,
+        children: [
+            { label: "All Clubs", path: "/clubs", icon: Club },
+            { label: "Cultural Clubs", path: "/clubs?type=cultural", icon: Sparkles },
+            { label: "Science Club", path: "/clubs?type=science", icon: FlaskConical },
+            { label: "Language Club", path: "/clubs?type=language", icon: Mic },
+            { label: "Debate Club", path: "/clubs?type=debate", icon: GitBranch },
+        ],
+    },
+    {
+        label: "Notices",
+        path: "/announcements",
+        icon: Bell,
+    },
+    {
+        label: "Gallery",
+        path: "/gallery",
+        icon: Grid,
+    },
+    {
+        label: "About Us",
+        path: "/about",
+        icon: Info,
+    },
+];
 
 const PublicHeader = () => {
+    const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+
     const navigate = useNavigate();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
     const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+    const [openDropdown, setOpenDropdown] = useState(null);
+    const [openMobileSub, setOpenMobileSub] = useState(null);
     const userMenuRef = useRef(null);
     const mobileMenuRef = useRef(null);
+    const dropdownTimeoutRef = useRef(null);
 
     const { data: settingsData } = useGetPublicSettingsQuery();
     const { data: pagesData } = useGetAllPagesQuery();
@@ -25,284 +148,428 @@ const PublicHeader = () => {
     const settings = settingsData?.settings || {};
     const pages = pagesData?.pages || [];
 
+    // Merge dynamic pages
+    const dynamicPages = pages.map((page) => ({
+        label: page.title,
+        path: `/${page.slug === "home" ? "" : page.slug}`,
+        icon: GraduationCap,
+    }));
+
+    //   const allNavItems = [...NAV_ITEMS, ...dynamicPages];
+
     const [logOutApiCall, { isLoading: isLoggingOut }] = useLogOutMutation();
     const dispatch = useAppDispatch();
     const { data: meData, isLoading: isAuthLoading } = useMeQuery();
     const user = meData?.user || {};
 
-    // Close mobile menu on route change
+    // Close menus on route change
     useEffect(() => {
         setIsMenuOpen(false);
         setIsUserMenuOpen(false);
+        setOpenDropdown(null);
+        setOpenMobileSub(null);
     }, [location.pathname]);
 
-    // Click outside user menu to close
+    // Click outside user menu
     useEffect(() => {
         const handleClickOutside = (event) => {
             if (userMenuRef.current && !userMenuRef.current.contains(event.target)) {
                 setIsUserMenuOpen(false);
             }
         };
-        document.addEventListener('mousedown', handleClickOutside);
-        return () => document.removeEventListener('mousedown', handleClickOutside);
+        document.addEventListener("mousedown", handleClickOutside);
+        return () => document.removeEventListener("mousedown", handleClickOutside);
     }, []);
 
-    // Prevent body scroll when mobile menu is open
+    // Prevent body scroll on mobile
     useEffect(() => {
-        if (isMenuOpen) {
-            document.body.style.overflow = 'hidden';
-        } else {
-            document.body.style.overflow = 'unset';
-        }
+        document.body.style.overflow = isMenuOpen ? "hidden" : "unset";
         return () => {
-            document.body.style.overflow = 'unset';
+            document.body.style.overflow = "unset";
         };
     }, [isMenuOpen]);
+
+    useEffect(() => {
+        return () => {
+            if (dropdownTimeoutRef.current) clearTimeout(dropdownTimeoutRef.current);
+        };
+    }, []);
 
     const handleLogout = async () => {
         try {
             await logOutApiCall().unwrap();
             dispatch(userLoggedOut());
-            toast.success('Logged out successfully');
-            navigate('/');
+            toast.success("Logged out successfully");
+            navigate("/");
             setIsUserMenuOpen(false);
         } catch (error) {
-            toast.error('Failed to logout. Please try again.');
+            toast.error("Failed to logout. Please try again.");
         }
     };
 
-    // Get initials for avatar
-    const getInitials = (name) => {
-        return name
-            .split(' ')
-            .map(word => word[0])
-            .join('')
+    const getInitials = (name) =>
+        name
+            .split(" ")
+            .map((word) => word[0])
+            .join("")
             .toUpperCase()
             .slice(0, 2);
+
+    const isActive = (item) => {
+        if (item.path && location.pathname === item.path) return true;
+        if (item.children) {
+            return item.children.some((child) => child.path && location.pathname === child.path);
+        }
+        return false;
     };
 
-    // Navigation items
-    const navItems = [
-        { path: '/directory', label: 'Administration', icon: Users },
-        { path: '/classes', label: 'Classes', icon: StepForward },
-        // ...pages.map(page => ({
-        //     path: `/${page.slug === 'home' ? '' : page.slug}`,
-        //     label: page.title,
-        //     icon: GraduationCap
-        // })),
-        { path: '/clubs', label: 'Clubs', icon: Club },
-        { path: '/announcements', label: 'Notices', icon: Bell },
-        { path: '/gallery', label: 'Gallery', icon: GalleryHorizontal },
-        { path: '/about-us', label: "About Us", icon: PenBox }
-
-    ];
-
-    const isActivePath = (path) => {
-        if (path === '') return location.pathname === '/';
-        return location.pathname === path;
+    const isParentActive = (item) => {
+        if (item.path && location.pathname === item.path) return true;
+        if (item.children) {
+            return item.children.some((child) => child.path && location.pathname === child.path);
+        }
+        return false;
     };
+
+    const handleMouseEnter = (index) => {
+        if (dropdownTimeoutRef.current) clearTimeout(dropdownTimeoutRef.current);
+        setOpenDropdown(index);
+    };
+
+    const handleMouseLeave = () => {
+        dropdownTimeoutRef.current = setTimeout(() => {
+            setOpenDropdown(null);
+        }, 150);
+    };
+
+    const toggleMobileSub = (index) => {
+        setOpenMobileSub(openMobileSub === index ? null : index);
+    };
+
+const toggleDarkMode = () => {
+    if (isDarkMode) {
+        console.log("applying light mode")
+        dispatch(setIsDarkMode(false))  // ✅ Use dispatch with the action creator
+    } else {
+        console.log("applying dark mode")
+        dispatch(setIsDarkMode(true))   // ✅ Use dispatch with the action creator
+    }
+}
 
     return (
-        <header className="bg-gradient-to-r from-blue-600 to-blue-700 shadow-lg sticky top-0 z-50">
+        <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
             <div className="container mx-auto px-4">
-                <div className="flex justify-between items-center h-20">
+                <div className="flex justify-between items-center h-16">
                     {/* Logo and School Name */}
                     <Link
                         to="/"
-                        className="flex items-center space-x-3 group transition-transform hover:scale-105"
+                        className="flex items-center space-x-3 flex-shrink-0"
                     >
-                        <div className="relative">
-                            <div className="absolute inset-0 bg-white/20 rounded-full blur-sm"></div>
-                            <img
-                                src={settings.SCHOOL_LOGO || schoolLogo}
-                                alt="School Logo"
-                                className="h-12 w-12 object-contain rounded-full bg-white/10 p-1 relative z-10 shadow-lg border-2 border-white/30"
-                            />
-                        </div>
-                        <div className="flex flex-col">
-                            <span className="text-xl font-bold text-white drop-shadow-md">
+                        <img
+                            src={settings.SCHOOL_LOGO || schoolLogo}
+                            alt="School Logo"
+                            className="h-10 w-10 object-contain rounded-full border border-gray-200"
+                        />
+                        <div className="hidden sm:block">
+                            <span className="text-lg font-semibold text-gray-800">
                                 {settings.SCHOOL_NAME || "Template School"}
-                            </span>
-                            <span className="text-xs text-blue-100 font-light">
-                                Excellence in Education
                             </span>
                         </div>
                     </Link>
 
                     {/* Desktop Navigation */}
                     <nav className="hidden lg:flex items-center space-x-1">
-                        {navItems.map((item) => (
-                            <Link
-                                key={item.path}
-                                to={item.path}
-                                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all duration-200 flex items-center space-x-2
-                                    ${isActivePath(item.path)
-                                        ? 'bg-white/20 text-white shadow-lg'
-                                        : 'text-blue-100 hover:bg-white/10 hover:text-white'
-                                    }`}
-                            >
-                                <item.icon className="w-4 h-4" />
-                                <span>{item.label}</span>
-                            </Link>
-                        ))}
+                        {NAV_ITEMS.map((item, index) => {
+                            const hasChildren = item.children && item.children.length > 0;
+                            const isItemActive = isActive(item);
 
-                        {/* User Section */}
-                        {isAuthLoading ? (
-                            <div className="ml-4 w-8 h-8 bg-white/20 rounded-full animate-pulse"></div>
-                        ) : user.name ? (
-                            <div className="relative ml-4" ref={userMenuRef}>
-                                <button
-                                    onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                                    className="flex items-center space-x-3 px-3 py-2 rounded-lg bg-white/10 hover:bg-white/20 transition-all duration-200"
-                                >
-                                    <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white font-medium shadow-lg">
-                                        {getInitials(user.name)}
-                                    </div>
-                                    <span className="text-white text-sm font-medium hidden xl:block">
-                                        {user.name.split(' ')[0]}
-                                    </span>
-                                    <ChevronDown className={`w-4 h-4 text-white transition-transform duration-200 ${isUserMenuOpen ? 'rotate-180' : ''}`} />
-                                </button>
-
-                                <AnimatePresence>
-                                    {isUserMenuOpen && (
-                                        <motion.div
-                                            initial={{ opacity: 0, y: -10, scale: 0.95 }}
-                                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                                            exit={{ opacity: 0, y: -10, scale: 0.95 }}
-                                            transition={{ duration: 0.15 }}
-                                            className="absolute right-0 mt-2 w-64 bg-white rounded-xl shadow-2xl py-2 border border-gray-100"
+                            if (hasChildren) {
+                                return (
+                                    <div
+                                        key={item.label}
+                                        className="relative"
+                                        onMouseEnter={() => handleMouseEnter(index)}
+                                        onMouseLeave={handleMouseLeave}
+                                    >
+                                        <button
+                                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${isItemActive || isParentActive(item)
+                                                ? "text-blue-600 bg-blue-50"
+                                                : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                                }`}
                                         >
-                                            <div className="px-4 py-3 border-b border-gray-100">
-                                                <p className="text-sm font-medium text-gray-900">{user.name}</p>
-                                                <p className="text-xs text-gray-500">{user.email}</p>
-                                            </div>
-                                            <Link
-                                                to="/admin/dashboard"
-                                                className="flex items-center space-x-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-blue-50 hover:text-blue-600 transition-colors"
-                                                onClick={() => setIsUserMenuOpen(false)}
+                                            <item.icon className="w-4 h-4" />
+                                            <span>{item.label}</span>
+                                            <ChevronDown
+                                                className={`w-3.5 h-3.5 transition-transform duration-200 ${openDropdown === index ? "rotate-180" : ""
+                                                    }`}
+                                            />
+                                        </button>
+                                        <AnimatePresence>
+                                            {openDropdown === index && (
+                                                <motion.div
+                                                    initial={{ opacity: 0, y: -4 }}
+                                                    animate={{ opacity: 1, y: 0 }}
+                                                    exit={{ opacity: 0, y: -4 }}
+                                                    transition={{ duration: 0.15 }}
+                                                    className="absolute left-0 mt-1 w-52 bg-white rounded-lg shadow-lg border border-gray-100 py-1.5"
+                                                >
+                                                    {item.children.map((child) => (
+                                                        <Link
+                                                            key={child.path}
+                                                            to={child.path}
+                                                            className={`flex items-center space-x-2.5 px-4 py-2 text-sm transition-colors ${location.pathname === child.path
+                                                                ? "text-blue-600 bg-blue-50"
+                                                                : "text-gray-700 hover:bg-gray-50 hover:text-blue-600"
+                                                                }`}
+                                                        >
+                                                            {child.icon && <child.icon className="w-4 h-4" />}
+                                                            <span>{child.label}</span>
+                                                        </Link>
+                                                    ))}
+                                                </motion.div>
+                                            )}
+                                        </AnimatePresence>
+                                    </div>
+                                );
+                            } else {
+                                return (
+                                    <Link
+                                        key={item.path}
+                                        to={item.path}
+                                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${isItemActive
+                                            ? "text-blue-600 bg-blue-50"
+                                            : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                            }`}
+                                    >
+                                        <item.icon className="w-4 h-4" />
+                                        <span>{item.label}</span>
+                                    </Link>
+                                );
+                            }
+                        })}
+
+                        {/* <div className="cursor-pointer" onClick={toggleDarkMode}>
+                            {isDarkMode ?
+                                <Sun className="w-5 h-5" /> :
+                                <Moon className="w-5 h-5" />}
+                        </div> */}
+                        {/* User Section */}
+                        <div className="ml-3 pl-3 border-l border-gray-200">
+                            {isAuthLoading ? (
+                                <div className="w-8 h-8 bg-gray-200 rounded-full animate-pulse"></div>
+                            ) : user.name ? (
+                                <div className="relative" ref={userMenuRef}>
+                                    <button
+                                        onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                                        className="flex items-center space-x-2 px-2 py-1.5 rounded-md hover:bg-gray-100 transition-colors"
+                                    >
+                                        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white text-sm font-medium">
+                                            {getInitials(user.name)}
+                                        </div>
+                                        <ChevronDown
+                                            className={`w-3.5 h-3.5 text-gray-500 transition-transform duration-200 ${isUserMenuOpen ? "rotate-180" : ""
+                                                }`}
+                                        />
+                                    </button>
+
+                                    <AnimatePresence>
+                                        {isUserMenuOpen && (
+                                            <motion.div
+                                                initial={{ opacity: 0, y: -4 }}
+                                                animate={{ opacity: 1, y: 0 }}
+                                                exit={{ opacity: 0, y: -4 }}
+                                                transition={{ duration: 0.15 }}
+                                                className="absolute right-0 mt-1.5 w-56 bg-white rounded-lg shadow-lg border border-gray-100 py-1.5"
                                             >
-                                                <LayoutDashboard className="w-4 h-4" />
-                                                <span>Dashboard</span>
-                                            </Link>
-                                            <button
-                                                onClick={handleLogout}
-                                                disabled={isLoggingOut}
-                                                className="w-full flex items-center space-x-3 px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 transition-colors"
-                                            >
-                                                <LogOut className="w-4 h-4" />
-                                                <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
-                                            </button>
-                                        </motion.div>
-                                    )}
-                                </AnimatePresence>
-                            </div>
-                        ) : (
-                            <div className="flex items-center space-x-2 ml-4">
-                                <Button
-                                    variant="outline"
-                                    asChild
-                                    className="text-white border-white/30 hover:bg-white/20 hover:text-white transition-all duration-200"
-                                >
-                                    <Link to="/login">Login</Link>
-                                </Button>
-                                <Button
-                                    asChild
-                                    className="bg-white text-blue-600 hover:bg-blue-50 hover:scale-105 transition-all duration-200 shadow-lg"
-                                >
-                                    <Link to="/signup">Sign Up</Link>
-                                </Button>
-                            </div>
-                        )}
+                                                <div className="px-4 py-2.5 border-b border-gray-100">
+                                                    <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                                                    <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                                                </div>
+                                                <Link
+                                                    to="/admin/dashboard"
+                                                    className="flex items-center space-x-2.5 px-4 py-2 text-sm text-gray-700 hover:bg-gray-50 hover:text-blue-600 transition-colors"
+                                                    onClick={() => setIsUserMenuOpen(false)}
+                                                >
+                                                    <LayoutDashboard className="w-4 h-4" />
+                                                    <span>Dashboard</span>
+                                                </Link>
+                                                <button
+                                                    onClick={handleLogout}
+                                                    disabled={isLoggingOut}
+                                                    className="w-full flex items-center space-x-2.5 px-4 py-2 text-sm text-red-600 hover:bg-red-50 transition-colors"
+                                                >
+                                                    <LogOut className="w-4 h-4" />
+                                                    <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
+                                                </button>
+                                            </motion.div>
+                                        )}
+                                    </AnimatePresence>
+                                </div>
+                            ) : (
+                                <div className="flex items-center space-x-2">
+                                    <Button
+                                        variant="ghost"
+                                        asChild
+                                        size="sm"
+                                        className="text-gray-600 hover:text-blue-600 hover:bg-blue-50"
+                                    >
+                                        <Link to="/login">Login</Link>
+                                    </Button>
+                                    <Button
+                                        asChild
+                                        size="sm"
+                                        className="bg-blue-600 text-white hover:bg-blue-700 shadow-sm"
+                                    >
+                                        <Link to="/signup">Sign Up</Link>
+                                    </Button>
+                                </div>
+                            )}
+                        </div>
                     </nav>
 
                     {/* Mobile Menu Button */}
                     <button
-                        className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-colors relative z-50"
+                        className="lg:hidden p-2 rounded-md hover:bg-gray-100 transition-colors"
                         onClick={() => setIsMenuOpen(!isMenuOpen)}
                         aria-label="Toggle menu"
                     >
                         {isMenuOpen ? (
-                            <X className="w-6 h-6 text-white" />
+                            <X className="w-5 h-5 text-gray-600" />
                         ) : (
-                            <Menu className="w-6 h-6 text-white" />
+                            <Menu className="w-5 h-5 text-gray-600" />
                         )}
                     </button>
                 </div>
             </div>
 
-            {/* Mobile Navigation - Full Screen Overlay */}
+            {/* Mobile Navigation */}
             <AnimatePresence>
                 {isMenuOpen && (
                     <motion.div
                         ref={mobileMenuRef}
-                        initial={{ opacity: 0, x: '100%' }}
-                        animate={{ opacity: 1, x: 0 }}
-                        exit={{ opacity: 0, x: '100%' }}
-                        transition={{ type: 'spring', damping: 25, stiffness: 300 }}
-                        className="fixed inset-0 top-20 bg-gradient-to-br from-blue-600 to-blue-800 z-40 lg:hidden"
+                        initial={{ opacity: 0, height: 0 }}
+                        animate={{ opacity: 1, height: "auto" }}
+                        exit={{ opacity: 0, height: 0 }}
+                        transition={{ duration: 0.2 }}
+                        className="lg:hidden bg-white border-t border-gray-200 overflow-hidden"
                     >
-                        <div className="container mx-auto px-4 py-6 h-full overflow-y-auto">
+                        <div className="container mx-auto px-4 py-4">
                             {/* User Profile Card (Mobile) */}
                             {user.name && (
-                                <div className="bg-white/10 backdrop-blur-lg rounded-2xl p-4 mb-6">
-                                    <div className="flex items-center space-x-4">
-                                        <div className="w-14 h-14 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 flex items-center justify-center text-white text-xl font-bold shadow-lg">
+                                <div className="bg-gray-50 rounded-lg p-4 mb-4">
+                                    <div className="flex items-center space-x-3">
+                                        <div className="w-12 h-12 rounded-full bg-gradient-to-br from-blue-500 to-indigo-500 flex items-center justify-center text-white font-medium">
                                             {getInitials(user.name)}
                                         </div>
-                                        <div className="flex-1">
-                                            <p className="text-white font-medium text-lg">{user.name}</p>
-                                            <p className="text-blue-100 text-sm">{user.email}</p>
+                                        <div>
+                                            <p className="text-sm font-medium text-gray-900">{user.name}</p>
+                                            <p className="text-xs text-gray-500">{user.email}</p>
                                         </div>
                                     </div>
                                 </div>
                             )}
 
                             {/* Mobile Navigation Links */}
-                            <div className="space-y-1">
-                                {navItems.map((item) => (
-                                    <Link
-                                        key={item.path}
-                                        to={item.path}
-                                        className={`flex items-center space-x-3 px-4 py-3 rounded-xl text-white transition-all duration-200
-                                            ${isActivePath(item.path)
-                                                ? 'bg-white/20 shadow-lg'
-                                                : 'hover:bg-white/10'
-                                            }`}
-                                    >
-                                        <item.icon className="w-5 h-5" />
-                                        <span className="font-medium">{item.label}</span>
-                                    </Link>
-                                ))}
+                            <div className="space-y-0.5">
+                                {NAV_ITEMS.map((item, index) => {
+                                    const hasChildren = item.children && item.children.length > 0;
+                                    const isItemActive = isActive(item);
+
+                                    if (hasChildren) {
+                                        return (
+                                            <div key={item.label} className="border-b border-gray-100 last:border-0">
+                                                <button
+                                                    onClick={() => toggleMobileSub(index)}
+                                                    className={`w-full flex items-center justify-between px-3 py-2.5 rounded-md transition-colors ${isItemActive || isParentActive(item)
+                                                        ? "text-blue-600 bg-blue-50"
+                                                        : "text-gray-700 hover:bg-gray-50"
+                                                        }`}
+                                                >
+                                                    <div className="flex items-center space-x-2.5">
+                                                        <item.icon className="w-4 h-4" />
+                                                        <span className="text-sm font-medium">{item.label}</span>
+                                                    </div>
+                                                    <ChevronRight
+                                                        className={`w-4 h-4 transition-transform duration-200 ${openMobileSub === index ? "rotate-90" : ""
+                                                            }`}
+                                                    />
+                                                </button>
+                                                <AnimatePresence>
+                                                    {openMobileSub === index && (
+                                                        <motion.div
+                                                            initial={{ height: 0, opacity: 0 }}
+                                                            animate={{ height: "auto", opacity: 1 }}
+                                                            exit={{ height: 0, opacity: 0 }}
+                                                            transition={{ duration: 0.2 }}
+                                                            className="overflow-hidden"
+                                                        >
+                                                            <div className="ml-6 pl-3 border-l-2 border-gray-200 space-y-0.5 py-1.5">
+                                                                {item.children.map((child) => (
+                                                                    <Link
+                                                                        key={child.path}
+                                                                        to={child.path}
+                                                                        className={`flex items-center space-x-2.5 px-3 py-2 rounded-md text-sm transition-colors ${location.pathname === child.path
+                                                                            ? "text-blue-600 bg-blue-50"
+                                                                            : "text-gray-600 hover:bg-gray-50 hover:text-blue-600"
+                                                                            }`}
+                                                                        onClick={() => setIsMenuOpen(false)}
+                                                                    >
+                                                                        {child.icon && <child.icon className="w-4 h-4" />}
+                                                                        <span>{child.label}</span>
+                                                                    </Link>
+                                                                ))}
+                                                            </div>
+                                                        </motion.div>
+                                                    )}
+                                                </AnimatePresence>
+                                            </div>
+                                        );
+                                    } else {
+                                        return (
+                                            <Link
+                                                key={item.path}
+                                                to={item.path}
+                                                className={`flex items-center space-x-2.5 px-3 py-2.5 rounded-md transition-colors ${isItemActive
+                                                    ? "text-blue-600 bg-blue-50"
+                                                    : "text-gray-700 hover:bg-gray-50"
+                                                    }`}
+                                                onClick={() => setIsMenuOpen(false)}
+                                            >
+                                                <item.icon className="w-4 h-4" />
+                                                <span className="text-sm font-medium">{item.label}</span>
+                                            </Link>
+                                        );
+                                    }
+                                })}
                             </div>
 
                             {/* Mobile Action Buttons */}
-                            <div className="mt-6 pt-6 border-t border-white/20">
+                            <div className="mt-4 pt-4 border-t border-gray-200">
                                 {user.name ? (
                                     <div className="space-y-2">
                                         <Link
                                             to="/admin/dashboard"
-                                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-white/20 backdrop-blur-sm rounded-xl text-white font-medium hover:bg-white/30 transition-all duration-200"
+                                            className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-gray-50 rounded-md text-gray-700 font-medium hover:bg-gray-100 transition-colors"
                                             onClick={() => setIsMenuOpen(false)}
                                         >
-                                            <LayoutDashboard className="w-5 h-5" />
+                                            <LayoutDashboard className="w-4 h-4" />
                                             <span>Dashboard</span>
                                         </Link>
                                         <button
                                             onClick={handleLogout}
                                             disabled={isLoggingOut}
-                                            className="w-full flex items-center justify-center space-x-2 px-4 py-3 bg-red-500/20 backdrop-blur-sm rounded-xl text-red-100 font-medium hover:bg-red-500/30 transition-all duration-200"
+                                            className="w-full flex items-center justify-center space-x-2 px-4 py-2.5 bg-red-50 text-red-600 rounded-md font-medium hover:bg-red-100 transition-colors"
                                         >
-                                            <LogOut className="w-5 h-5" />
-                                            <span>{isLoggingOut ? 'Logging out...' : 'Logout'}</span>
+                                            <LogOut className="w-4 h-4" />
+                                            <span>{isLoggingOut ? "Logging out..." : "Logout"}</span>
                                         </button>
                                     </div>
                                 ) : (
-                                    <div className="grid grid-cols-2 gap-3">
+                                    <div className="grid grid-cols-2 gap-2">
                                         <Button
                                             variant="outline"
                                             asChild
-                                            className="text-white border-white/30 hover:bg-white/20 hover:text-white"
+                                            className="text-gray-600 border-gray-300 hover:bg-gray-50"
                                         >
                                             <Link to="/login" onClick={() => setIsMenuOpen(false)}>
                                                 Login
@@ -310,7 +577,7 @@ const PublicHeader = () => {
                                         </Button>
                                         <Button
                                             asChild
-                                            className="bg-white text-blue-600 hover:bg-blue-50"
+                                            className="bg-blue-600 text-white hover:bg-blue-700"
                                         >
                                             <Link to="/signup" onClick={() => setIsMenuOpen(false)}>
                                                 Sign Up
@@ -318,11 +585,6 @@ const PublicHeader = () => {
                                         </Button>
                                     </div>
                                 )}
-                            </div>
-
-                            {/* Footer Info */}
-                            <div className="mt-8 text-center text-blue-200 text-sm">
-                                <p>© {new Date().getFullYear()} {settings.SCHOOL_NAME || "Template School"}</p>
                             </div>
                         </div>
                     </motion.div>

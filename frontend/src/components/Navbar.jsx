@@ -14,6 +14,15 @@ export default function Navbar() {
   const [isVisible, setIsVisible] = useState(true);
   const [lastScrollY, setLastScrollY] = useState(0);
 
+  const toggleDarkMode = () => {
+      if (isDarkMode) {
+          console.log("applying light mode")
+          dispatch(setIsDarkMode(false))  // ✅ Use dispatch with the action creator
+      } else {
+          console.log("applying dark mode")
+          dispatch(setIsDarkMode(true))   // ✅ Use dispatch with the action creator
+      }
+  }
   useEffect(() => {
     const controlNavbar = () => {
       const currentScrollY = window.scrollY;
@@ -58,14 +67,14 @@ export default function Navbar() {
         </div>
 
         <div className="flex items-center gap-3">
-          {/* <Button
+          <Button
             size="icon"
             variant="ghost"
             onClick={() => dispatch(setIsDarkMode(!isDarkMode))}
             className="transition-all duration-200 hover:scale-105"
           >
             {isDarkMode ? <Sun size={18} /> : <Moon size={18} />}
-          </Button> */}
+          </Button>
 
           <div className="flex items-center gap-2 transition-opacity duration-300">
             <Avatar className="h-8 w-8 transition-all duration-200 hover:scale-105">
