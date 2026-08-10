@@ -24,6 +24,7 @@ import {
     useTogglePublishGalleryImageMutation
 } from "@/features/apis/galleryApi";
 import { useAppSelector } from "@/features/store";
+import { backend_url } from "@/utils/server";
 import {
     Award,
     ChevronLeft,
@@ -407,7 +408,7 @@ export default function GalleryManager() {
                                     <Card key={image._id} className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} overflow-hidden group hover:shadow-lg transition-shadow`}>
                                         <div className="relative aspect-square overflow-hidden bg-gray-100">
                                             <img
-                                                src={image.imageUrl}
+                                               src={`${backend_url}${image.imageUrl}`}
                                                 alt={image.title}
                                                 className="w-full h-full object-cover transition-transform duration-300 group-hover:scale-110"
                                             />
@@ -489,7 +490,7 @@ export default function GalleryManager() {
                                                     <tr key={image._id} className={theme.table.row}>
                                                         <td className="p-4">
                                                             <img
-                                                                src={image.imageUrl}
+                                                                src={`${backend_url}${image.imageUrl}`}
                                                                 alt={image.title}
                                                                 className="w-16 h-16 object-cover rounded"
                                                             />
