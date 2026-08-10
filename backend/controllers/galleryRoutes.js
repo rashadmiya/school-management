@@ -6,7 +6,8 @@ const { uploadSingleImage } = require("../multer");
 const fs = require("fs");
 const path = require("path");
 const Gallery = require("../models/Gallery");
-const ErrorHandler = require("../utils/errorHandler");
+// const ErrorHandler = require("../utils/errorHandler");
+const ErrorHandler = require("../utils/ErrorHandler");
 
 // Public routes
 router.get("/", async (req, res, next) => {
