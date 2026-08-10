@@ -1,5 +1,5 @@
 // /src/pages/administration/AdministrationLayout.jsx
-import { FileText, Key, Megaphone, Settings, Shield, Users } from 'lucide-react';
+import { FileText, ImageIcon, Key, Megaphone, Settings, Shield, Users } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 
@@ -35,7 +35,12 @@ const AdministrationLayout = () => {
       icon: <FileText className="w-4 h-4" />,
       description: 'Create and updates public pages'
     },
-
+    {
+      name: "Gallery",
+      path: "/admin/gallery",
+      icon: <ImageIcon className='w-4 h-4' />,
+      description: 'Manage school gallery images, categories, and descriptions'
+    },
     // Add more admin features here in the future
   ];
 

@@ -89,6 +89,7 @@ const paymentRoutes = require('./financeSystem/routes/paymentRoutes');
 const refundRoutes = require('./financeSystem/routes/refundRoutes');
 const waiverRoutes = require('./financeSystem/routes/waiverRoutes');
 const reportRoutes = require('./financeSystem/routes/reportRoutes');
+const galleryRoutes = require('./controllers/galleryRoutes');
 //finance routes
 
 app.use("/api/s2/user", user);
@@ -116,6 +117,7 @@ app.use('/api/s2/stuff', stuffRoutes);
 app.use('/api/s2/committee', committeeRoutes);
 app.use('/api/s2/cabinet', cabinetRoutes);
 app.use('/api/s2/clubs', clubRoutes);
+app.use('/api/s2/gallery', galleryRoutes);
 // app.use("/api/s2/finance/reports", reportRoutes);
 // NEW: Mount finance routes
 app.use("/api/s2/fees", feesRoutes);

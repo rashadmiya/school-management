@@ -100,6 +100,8 @@ import StaffManagementPage from "./pages/public/admin/StaffManagementPage";
 import CommitteeManagementPage from "./pages/public/admin/CommitteeManagementPage";
 import CabinetManagementPage from "./pages/public/admin/CabinetManagementPage";
 import ClubManagementPage from "./pages/public/admin/ClubManagementPage";
+import GalleryPage from "./pages/public/GalleryPage";
+import GalleryManager from "./pages/public/admin/GalleryManager";
 
 function App() {
   return (
@@ -125,6 +127,7 @@ function App() {
           <Route path="administration/staff" element={<StaffInformationPage />} />
           <Route path="classes" element={<ClassListPage />} />
           <Route path="clubs" element={<ClubsPage />} />
+          <Route path="gallery" element={<GalleryPage />} />
         </Route>
 
         {/* Admin/Teacher Routes with Dashboard Layout */}
@@ -176,6 +179,7 @@ function App() {
             <Route path="committee" element={<CommitteeManagementPage />} />
             <Route path="cabinet" element={<CabinetManagementPage />} />
             <Route path="clubs" element={<ClubManagementPage />} />
+            <Route path="gallery" element={<AdminProtectedRoute children={<GalleryManager />} />} />
             {/* Redirect admin root to admin dashboard */}
             <Route path="" element={<Navigate to="dashboard" replace />} />
           </Routes>

@@ -1,3 +1,4 @@
+// features/apis/publicApi.js
 import { api } from "./api"; // your baseApi setup (already used in authApi, etc.)
 
 export const publicApi = api.injectEndpoints({
@@ -38,6 +39,29 @@ export const publicApi = api.injectEndpoints({
         getAnnouncementCategories: builder.query({
             query: () => '/announcements/public-announcements/categories',
         }),
+
+        // ==================== Gallery Public Endpoints ====================
+        getPublicGalleryImages: builder.query({
+            query: (params = {}) => ({
+                url: '/gallery',
+                params: {
+                    page: params.page || 1,
+                    limit: params.limit || 20,
+                    category: params.category || '',
+                    search: params.search || '',
+                    ...params
+                }
+            }),
+            providesTags: ['Gallery'],
+        }),
+        getPublicGalleryImage: builder.query({
+            query: (id) => `/gallery/${id}`,
+            providesTags: (result, error, id) => [{ type: 'Gallery', id }],
+        }),
+        getPublicGalleryCategories: builder.query({
+            query: () => '/gallery/categories',
+            providesTags: ['GalleryCategories'],
+        }),
     }),
 });
 
@@ -50,5 +74,8 @@ export const {
     useGetPublicAnnouncementsQuery,
     useGetPublicAnnouncementQuery,
     useGetAnnouncementCategoriesQuery,
-    
+    //public gallery
+    useGetPublicGalleryImagesQuery,
+    useGetPublicGalleryImageQuery,
+    useGetPublicGalleryCategoriesQuery,
 } = publicApi;

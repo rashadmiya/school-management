@@ -4,9 +4,6 @@ import { customBaseQuery } from "../baseQuery";
 export const api = createApi({
     reducerPath: "api",
     baseQuery: customBaseQuery,
-    // tagTypes: [
-    //     "Students", "Subjects", "Teachers", "Classes", "Routines", "Attendance", "Exams", "Assignments", "Results", "Parents", "Notifications", "Grades"
-    // ],
 
     tagTypes: [
         'Auth',
@@ -46,6 +43,9 @@ export const api = createApi({
         'FeeInstance',
         'Report',
         'Ledger',
+        // NEW: Gallery tags
+        'Gallery',
+        'GalleryCategories',
     ],
     endpoints: (builder) => ({
 
@@ -375,18 +375,3 @@ export const {
     useDeleteAnnouncementMutation,
     useTogglePinAnnouncementMutation,
 } = api;
-
-
-//  export const adminApi = api.injectEndpoints({
-//    endpoints: (builder) => ({
-//      getAdminStats: builder.query({
-//        query: () => '/admin/stats',
-//      }),
-//      getTodayAttendance: builder.query({
-//        query: () => '/admin/today-attendance',
-//      }),
-//      getRecentActivity: builder.query({
-//        query: () => '/admin/recent-activity',
-//      }),
-//    }),
-//  });
