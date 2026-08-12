@@ -22,7 +22,8 @@ const router = express.Router();
 // ==================== STUDENT CREATION ENDPOINTS ====================
 
 // ✅ OPTION 1: Create Student WITHOUT Photo (Simple)
-router.post("/register",
+router.post(
+  "/register",
   isAuthenticated,
   authorizeRoles("admin", "teacher"),
   async (req, res, next) => {
@@ -34,10 +35,8 @@ router.post("/register",
         rollNumber,
         password = "123456",
         classId,
-        // gradeId,
         parentId,
         gender,
-        // New fields
         session,
         birthRegNo,
         fathersName,
@@ -52,7 +51,6 @@ router.post("/register",
         transportRoute,
         outstandingBalance = 0,
         financialNotes
-        // Note: No photo field
       } = req.body;
 
       // Validation for required fields
@@ -66,13 +64,19 @@ router.post("/register",
         return next(new ErrorHandler("Roll number already exists", 400));
       }
 
-      // Check if parent exists
-      const parent = await Parent.findById(parentId);
-      if (!parent) {
-        return next(new ErrorHandler("Parent not found", 404));
+      // ✅ Make parent optional: only validate if parentId is provided
+      let parentObjectId = null;
+      if (parentId) {
+        const parent = await Parent.findById(parentId);
+        if (parent) {
+          parentObjectId = parent._id;
+        } else {
+          // Optionally log or ignore; you can also throw a warning
+          console.warn(`Parent with ID ${parentId} not found, skipping association.`);
+        }
       }
 
-      // Check if class exists
+      // Check if class exists (if provided)
       if (classId) {
         const classExists = await Class.findById(classId);
         if (!classExists) {
@@ -96,10 +100,8 @@ router.post("/register",
         rollNumber,
         password,
         class: classId,
-        parent: parentId,
-        // grade: gradeId,
+        parent: parentObjectId, // Will be null if no parent or not found
         gender,
-        // New fields
         session,
         birthRegNo,
         fathersName,
@@ -109,7 +111,6 @@ router.post("/register",
         isPhysicallyDisabled,
         disabilityDescription: isPhysicallyDisabled ? disabilityDescription : '',
         lastExamResult: formattedLastExamResult,
-        // Additional fields
         dateOfBirth,
         feeCategory,
         transportRoute,
@@ -118,7 +119,7 @@ router.post("/register",
         isStudent: true
       });
 
-      // 🔹 Assign the student to the class
+      // 🔹 Assign the student to the class (if classId provided)
       if (classId) {
         await Class.findByIdAndUpdate(
           classId,
@@ -127,16 +128,17 @@ router.post("/register",
         );
       }
 
-      // 🔹 Update parent's children array
-      await Parent.findByIdAndUpdate(
-        parentId,
-        { $addToSet: { children: student._id } },
-        { new: true }
-      );
+      // 🔹 Update parent's children array (only if parentObjectId exists)
+      if (parentObjectId) {
+        await Parent.findByIdAndUpdate(
+          parentObjectId,
+          { $addToSet: { children: student._id } },
+          { new: true }
+        );
+      }
 
       // Send response
       sendStudentToken(student, 201, res);
-
     } catch (error) {
       console.error("Student registration error:", error);
 
@@ -157,7 +159,143 @@ router.post("/register",
   }
 );
 
-router.post("/register-with-photo",
+// router.post("/register",
+//   isAuthenticated,
+//   authorizeRoles("admin", "teacher"),
+//   async (req, res, next) => {
+//     let user; // For cleanup scope
+
+//     try {
+//       const {
+//         name,
+//         rollNumber,
+//         password = "123456",
+//         classId,
+//         // gradeId,
+//         parentId,
+//         gender,
+//         // New fields
+//         session,
+//         birthRegNo,
+//         fathersName,
+//         mothersName,
+//         guardianContact,
+//         religion,
+//         isPhysicallyDisabled = false,
+//         disabilityDescription,
+//         lastExamResult,
+//         dateOfBirth,
+//         feeCategory = 'regular',
+//         transportRoute,
+//         outstandingBalance = 0,
+//         financialNotes
+//         // Note: No photo field
+//       } = req.body;
+
+//       // Validation for required fields
+//       if (!session) {
+//         return next(new ErrorHandler("Session is required", 400));
+//       }
+
+//       // Check for duplicate roll number
+//       const existing = await Student.findOne({ rollNumber });
+//       if (existing) {
+//         return next(new ErrorHandler("Roll number already exists", 400));
+//       }
+
+//       // Check if parent exists
+//       const parent = await Parent.findById(parentId);
+//       if (!parent) {
+//         return next(new ErrorHandler("Parent not found", 404));
+//       }
+
+//       // Check if class exists
+//       if (classId) {
+//         const classExists = await Class.findById(classId);
+//         if (!classExists) {
+//           return next(new ErrorHandler("Class not found", 404));
+//         }
+//       }
+
+//       // Prepare lastExamResult object
+//       let formattedLastExamResult = null;
+//       if (lastExamResult) {
+//         formattedLastExamResult = {
+//           examName: lastExamResult.examName || '',
+//           achievedMarks: lastExamResult.achievedMarks || '',
+//           totalMarks: lastExamResult.totalMarks || ''
+//         };
+//       }
+
+//       // Create student WITHOUT photo
+//       const student = await Student.create({
+//         name,
+//         rollNumber,
+//         password,
+//         class: classId,
+//         parent: parentId,
+//         // grade: gradeId,
+//         gender,
+//         // New fields
+//         session,
+//         birthRegNo,
+//         fathersName,
+//         mothersName,
+//         guardianContact,
+//         religion,
+//         isPhysicallyDisabled,
+//         disabilityDescription: isPhysicallyDisabled ? disabilityDescription : '',
+//         lastExamResult: formattedLastExamResult,
+//         // Additional fields
+//         dateOfBirth,
+//         feeCategory,
+//         transportRoute,
+//         outstandingBalance,
+//         financialNotes,
+//         isStudent: true
+//       });
+
+//       // 🔹 Assign the student to the class
+//       if (classId) {
+//         await Class.findByIdAndUpdate(
+//           classId,
+//           { $addToSet: { students: student._id } },
+//           { new: true }
+//         );
+//       }
+
+//       // 🔹 Update parent's children array
+//       await Parent.findByIdAndUpdate(
+//         parentId,
+//         { $addToSet: { children: student._id } },
+//         { new: true }
+//       );
+
+//       // Send response
+//       sendStudentToken(student, 201, res);
+
+//     } catch (error) {
+//       console.error("Student registration error:", error);
+
+//       // Handle validation errors
+//       if (error.name === 'ValidationError') {
+//         const messages = Object.values(error.errors).map(val => val.message);
+//         return next(new ErrorHandler(messages.join(', '), 400));
+//       }
+
+//       // Handle duplicate key error
+//       if (error.code === 11000) {
+//         const field = Object.keys(error.keyPattern)[0];
+//         return next(new ErrorHandler(`${field} already exists`, 400));
+//       }
+
+//       next(error);
+//     }
+//   }
+// );
+
+router.post(
+  "/register-with-photo",
   isAuthenticated,
   authorizeRoles("admin", "teacher"),
   upload.single('photo'),
@@ -171,7 +309,6 @@ router.post("/register-with-photo",
         rollNumber,
         password = "123456",
         classId,
-        // gradeId,
         parentId, // Could be empty string or undefined
         gender,
         session,
@@ -191,7 +328,7 @@ router.post("/register-with-photo",
       } = req.body;
 
       // Clean up parentId - handle empty string or "undefined" string
-      const cleanedParentId = parentId && parentId.trim() !== "" && parentId !== "undefined"
+      let cleanedParentId = parentId && parentId.trim() !== "" && parentId !== "undefined"
         ? parentId
         : null;
 
@@ -220,7 +357,6 @@ router.post("/register-with-photo",
           return next(new ErrorHandler("Image size should be less than 5MB", 400));
         }
 
-        // photoPath = req.file.path || req.file.filename;
         photoPath = `/uploads/avatars/students/${req.file.filename}`;
       }
 
@@ -233,19 +369,18 @@ router.post("/register-with-photo",
         return next(new ErrorHandler("Roll number already exists", 400));
       }
 
-      // Check if parent exists ONLY if parentId is provided
+      // 🟢 Parent lookup – now optional and lenient
       let parent = null;
       if (cleanedParentId) {
         parent = await Parent.findById(cleanedParentId);
         if (!parent) {
-          if (photoPath && fs.existsSync(photoPath)) {
-            fs.unlinkSync(photoPath);
-          }
-          return next(new ErrorHandler("Parent not found", 404));
+          // Log a warning but continue; student will be created without parent association
+          console.warn(`Parent with ID ${cleanedParentId} not found, proceeding without parent.`);
+          cleanedParentId = null; // Reset to null for student creation
         }
       }
 
-      // Check if class exists
+      // Check if class exists (if provided)
       if (classId) {
         const classExists = await Class.findById(classId);
         if (!classExists) {
@@ -280,8 +415,7 @@ router.post("/register-with-photo",
         rollNumber,
         password,
         class: classId,
-        parent: cleanedParentId, // Use cleaned parentId (could be null)
-        // grade: gradeId,
+        parent: cleanedParentId, // null if parent not found or not provided
         gender,
         session,
         birthRegNo,
@@ -319,7 +453,7 @@ router.post("/register-with-photo",
         );
       }
 
-      // 🔹 Update parent's children array ONLY if parent exists
+      // 🔹 Update parent's children array ONLY if a valid parent exists
       if (cleanedParentId && parent) {
         await Parent.findByIdAndUpdate(
           cleanedParentId,

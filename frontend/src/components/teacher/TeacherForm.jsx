@@ -1,3 +1,4 @@
+// components/teacher/TeacherDialogForm.jsx
 import React, { useEffect, useState } from "react";
 import {
   Dialog,
@@ -26,6 +27,34 @@ import { toast } from "react-toastify";
 import { Calendar, GraduationCap, MapPin, User } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useUpdateTeacherMutation } from "@/features/apis/teachersApi";
+import { useAppSelector } from "@/features/store";
+
+// Shared theme hook (can be moved to a separate file)
+const useTheme = () => {
+  const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+  return {
+    isDarkMode,
+    bg: isDarkMode ? "bg-gray-900" : "bg-white",
+    text: isDarkMode ? "text-white" : "text-gray-900",
+    textSecondary: isDarkMode ? "text-gray-300" : "text-gray-700",
+    textMuted: isDarkMode ? "text-gray-400" : "text-gray-500",
+    border: isDarkMode ? "border-gray-700" : "border-gray-200",
+    bgInput: isDarkMode ? "bg-gray-800" : "bg-white",
+    borderInput: isDarkMode ? "border-gray-700" : "border-gray-300",
+    focusRing: "focus:ring-blue-500 focus:border-blue-500",
+    bgSubtle: isDarkMode ? "bg-gray-800/50" : "bg-gray-50",
+    bgHover: isDarkMode ? "hover:bg-gray-800" : "hover:bg-gray-50",
+  };
+};
+
+// Religion options
+const RELIGIONS = [
+  { value: "islam", label: "Islam" },
+  { value: "hinduism", label: "Hinduism" },
+  { value: "christianity", label: "Christianity" },
+  { value: "buddhism", label: "Buddhism" },
+  { value: "others", label: "Others" },
+];
 
 export default function TeacherDialogForm({
   open,
@@ -34,6 +63,7 @@ export default function TeacherDialogForm({
   subjects = [],
   classes = [],
 }) {
+  const theme = useTheme();
   const [activeTab, setActiveTab] = useState("basic");
   const [photo, setPhoto] = useState(null);
   const [photoPreview, setPhotoPreview] = useState(null);
@@ -51,7 +81,6 @@ export default function TeacherDialogForm({
     formState: { errors },
   } = useForm({
     defaultValues: {
-      // Basic Information
       name: "",
       email: "",
       phoneNumber: "",
@@ -59,30 +88,22 @@ export default function TeacherDialogForm({
       confirmPassword: "",
       gender: "",
       dateOfBirth: "",
-
-      // Professional Information
       designation: "",
       joiningDate: "",
       nationalIdNo: "",
-
-      // Qualification
       lastQualification: {
         name: "",
         major: "",
-        institute: ""
+        institute: "",
       },
-
-      // Address & Religion
       address: "",
       religion: "",
-
-      // Assignments
       assignedSubjects: [],
       assignedClasses: [],
     },
   });
 
-  // Load initial data in edit mode
+  // Load initial data
   useEffect(() => {
     if (open) {
       if (initialData) {
@@ -92,24 +113,19 @@ export default function TeacherDialogForm({
           phoneNumber: initialData.phoneNumber ?? "",
           gender: initialData.gender ?? "",
           dateOfBirth: initialData.dateOfBirth ? new Date(initialData.dateOfBirth).toISOString().split('T')[0] : "",
-
           designation: initialData.designation ?? "",
           joiningDate: initialData.joiningDate ? new Date(initialData.joiningDate).toISOString().split('T')[0] : "",
           nationalIdNo: initialData.nationalIdNo ?? "",
-
           lastQualification: {
             name: initialData.lastQualification?.name ?? "",
             major: initialData.lastQualification?.major ?? "",
-            institute: initialData.lastQualification?.institute ?? ""
+            institute: initialData.lastQualification?.institute ?? "",
           },
-
           address: initialData.address ?? "",
           religion: initialData.religion ?? "",
-
           assignedSubjects: initialData.subjects?.map((s) => s._id) ?? [],
           assignedClasses: initialData.classes?.map((c) => c._id) ?? [],
         });
-
         if (initialData.photoUrl) {
           setPhotoPreview(initialData.photoUrl);
         }
@@ -122,20 +138,12 @@ export default function TeacherDialogForm({
           confirmPassword: "",
           gender: "",
           dateOfBirth: "",
-
           designation: "",
           joiningDate: new Date().toISOString().split('T')[0],
           nationalIdNo: "",
-
-          lastQualification: {
-            name: "",
-            major: "",
-            institute: ""
-          },
-
+          lastQualification: { name: "", major: "", institute: "" },
           address: "",
           religion: "",
-
           assignedSubjects: [],
           assignedClasses: [],
         });
@@ -155,59 +163,39 @@ export default function TeacherDialogForm({
 
   const onSubmit = async (formData) => {
     try {
-      // For new teacher, validate password
-      console.log("updating teacher:", initialData)
-
       if (!initialData) {
-        if (!formData.password) {
-          return toast.error("Password is required");
-        }
-        if (formData.password !== formData.confirmPassword) {
+        if (!formData.password) return toast.error("Password is required");
+        if (formData.password !== formData.confirmPassword)
           return toast.error("Passwords do not match");
-        }
       }
 
-      // Prepare payload
       const payload = { ...formData };
-
-      // Clean up payload
       delete payload.confirmPassword;
 
-      // Format lastQualification if it exists
-      if (payload.lastQualification &&
+      if (
+        payload.lastQualification &&
         (!payload.lastQualification.name ||
           !payload.lastQualification.major ||
-          !payload.lastQualification.institute)) {
-        // Remove empty qualification
+          !payload.lastQualification.institute)
+      ) {
         delete payload.lastQualification;
       }
 
-      // Format arrays
       payload.assignedSubjects = Array.isArray(payload.assignedSubjects)
         ? payload.assignedSubjects
         : [payload.assignedSubjects].filter(Boolean);
-
       payload.assignedClasses = Array.isArray(payload.assignedClasses)
         ? payload.assignedClasses
         : [payload.assignedClasses].filter(Boolean);
 
       if (initialData) {
-        // Update existing teacher (photo updated separately)
-        await updateTeacher({
-          id: initialData._id,
-          ...payload,
-        }).unwrap();
-
+        await updateTeacher({ id: initialData._id, ...payload }).unwrap();
         toast.success("Teacher updated successfully");
       } else {
-        // Create new teacher
         if (photo) {
-          // Use create-with-photo endpoint
           const formDataWithPhoto = new FormData();
-
-          // Append all fields to form data
-          Object.keys(payload).forEach(key => {
-            if (key === 'lastQualification') {
+          Object.keys(payload).forEach((key) => {
+            if (key === "lastQualification") {
               formDataWithPhoto.append(key, JSON.stringify(payload[key]));
             } else if (Array.isArray(payload[key])) {
               formDataWithPhoto.append(key, JSON.stringify(payload[key]));
@@ -215,18 +203,13 @@ export default function TeacherDialogForm({
               formDataWithPhoto.append(key, payload[key]);
             }
           });
-
-          formDataWithPhoto.append('photo', photo);
-
+          formDataWithPhoto.append("photo", photo);
           await createTeacherWithPhoto(formDataWithPhoto).unwrap();
         } else {
-          // Use simple create endpoint
           await createTeacher(payload).unwrap();
         }
-
         toast.success("Teacher created successfully");
       }
-
       onOpenChange(false);
     } catch (err) {
       console.error("Error saving teacher:", err);
@@ -236,150 +219,168 @@ export default function TeacherDialogForm({
 
   const isLoading = creating || updating || creatingWithPhoto;
 
-  const selectedSubjects = watch("assignedSubjects") || [];
-  const selectedClasses = watch("assignedClasses") || [];
+  // Base input class
+  const inputClass = `${theme.bgInput} ${theme.borderInput} ${theme.focusRing} text-gray-900 dark:text-white placeholder:text-gray-400 dark:placeholder:text-gray-500`;
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-auto flex flex-col p-0 bg-white text-gray-900">
+      <DialogContent
+        className={`sm:max-w-[700px] max-h-[90vh] overflow-auto flex flex-col p-0 ${theme.bg} ${theme.text}`}
+      >
         {/* Header */}
-        <div className="sticky top-0 z-10 bg-white px-6 py-4 border-b border-gray-200">
+        <div className={`sticky top-0 z-10 px-6 py-4 border-b ${theme.border} ${theme.bg}`}>
           <DialogHeader>
-            <DialogTitle className="text-xl text-gray-900">
+            <DialogTitle className={`text-xl ${theme.text}`}>
               {initialData ? "Edit Teacher" : "Create New Teacher"}
             </DialogTitle>
           </DialogHeader>
 
           <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-2">
-            <TabsList className="grid grid-cols-4 bg-gray-100">
-              <TabsTrigger value="basic" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Basic Info</TabsTrigger>
-              <TabsTrigger value="professional" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Professional</TabsTrigger>
-              <TabsTrigger value="qualification" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Qualification</TabsTrigger>
-              <TabsTrigger value="assignments" className="data-[state=active]:bg-white data-[state=active]:text-gray-900 text-gray-600">Assignments</TabsTrigger>
+            <TabsList className="grid grid-cols-3 bg-gray-100 dark:bg-gray-800">
+              <TabsTrigger
+                value="basic"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-white text-gray-600 dark:text-gray-400"
+              >
+                Basic Info
+              </TabsTrigger>
+              <TabsTrigger
+                value="professional"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-white text-gray-600 dark:text-gray-400"
+              >
+                Professional
+              </TabsTrigger>
+              <TabsTrigger
+                value="qualification"
+                className="data-[state=active]:bg-white data-[state=active]:text-gray-900 dark:data-[state=active]:bg-gray-700 dark:data-[state=active]:text-white text-gray-600 dark:text-gray-400"
+              >
+                Qualification
+              </TabsTrigger>
             </TabsList>
 
-            {/* Scrollable form body */}
             <div className="overflow-y-auto px-6 py-4 flex-1">
               <form id="teacherForm" onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-
                 {/* Tab 1: Basic Information */}
                 <TabsContent value="basic" className="space-y-4 mt-0">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Name */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Full Name *</Label>
+                      <Label className={theme.textSecondary}>Full Name *</Label>
                       <Input
                         {...register("name", { required: "Name is required" })}
-                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.name ? "border-red-500" : ""}`}
+                        className={`${inputClass} ${errors.name ? "border-red-500" : ""}`}
                         placeholder="Enter full name"
                       />
-                      {errors.name && (
-                        <p className="text-sm text-red-500">{errors.name.message}</p>
-                      )}
+                      {errors.name && <p className="text-sm text-red-500">{errors.name.message}</p>}
                     </div>
 
                     {/* Email */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Email *</Label>
+                      <Label className={theme.textSecondary}>Email *</Label>
                       <Input
                         type="email"
                         {...register("email", {
                           required: "Email is required",
                           pattern: {
                             value: /^[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}$/i,
-                            message: "Invalid email address"
-                          }
+                            message: "Invalid email address",
+                          },
                         })}
-                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.email ? "border-red-500" : ""}`}
+                        className={`${inputClass} ${errors.email ? "border-red-500" : ""}`}
                         placeholder="teacher@school.com"
                       />
-                      {errors.email && (
-                        <p className="text-sm text-red-500">{errors.email.message}</p>
-                      )}
+                      {errors.email && <p className="text-sm text-red-500">{errors.email.message}</p>}
                     </div>
 
-                    {/* Phone Number */}
+                    {/* Phone */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Phone Number *</Label>
+                      <Label className={theme.textSecondary}>Phone Number *</Label>
                       <Input
                         {...register("phoneNumber", { required: "Phone number is required" })}
-                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.phoneNumber ? "border-red-500" : ""}`}
+                        className={`${inputClass} ${errors.phoneNumber ? "border-red-500" : ""}`}
                         placeholder="+8801234567890"
                       />
-                      {errors.phoneNumber && (
-                        <p className="text-sm text-red-500">{errors.phoneNumber.message}</p>
-                      )}
+                      {errors.phoneNumber && <p className="text-sm text-red-500">{errors.phoneNumber.message}</p>}
                     </div>
 
                     {/* Gender */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Gender</Label>
+                      <Label className={theme.textSecondary}>Gender</Label>
                       <Select
                         value={watch("gender")}
                         onValueChange={(value) => setValue("gender", value)}
                       >
-                        <SelectTrigger className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
+                        <SelectTrigger className={`${inputClass}`}>
                           <SelectValue placeholder="Select gender" />
                         </SelectTrigger>
-                        <SelectContent className="bg-white">
-                          <SelectItem value="male" className="text-gray-900">Male</SelectItem>
-                          <SelectItem value="female" className="text-gray-900">Female</SelectItem>
-                          <SelectItem value="other" className="text-gray-900">Other</SelectItem>
+                        <SelectContent className={theme.bg}>
+                          <SelectItem value="male">Male</SelectItem>
+                          <SelectItem value="female">Female</SelectItem>
+                          <SelectItem value="other">Other</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
 
                     {/* Date of Birth */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Date of Birth</Label>
+                      <Label className={theme.textSecondary}>Date of Birth</Label>
                       <div className="relative">
                         <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
                           type="date"
                           {...register("dateOfBirth")}
-                          className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 pl-10"
+                          className={`${inputClass} pl-10`}
                           max={new Date().toISOString().split('T')[0]}
                         />
                       </div>
                     </div>
 
-                    {/* Religion */}
+                    {/* Religion - Dropdown */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Religion</Label>
-                      <Input
-                        {...register("religion")}
-                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
-                        placeholder="Religion"
-                      />
+                      <Label className={theme.textSecondary}>Religion</Label>
+                      <Select
+                        value={watch("religion")}
+                        onValueChange={(value) => setValue("religion", value)}
+                      >
+                        <SelectTrigger className={`${inputClass}`}>
+                          <SelectValue placeholder="Select religion" />
+                        </SelectTrigger>
+                        <SelectContent className={theme.bg}>
+                          {RELIGIONS.map((rel) => (
+                            <SelectItem key={rel.value} value={rel.value}>
+                              {rel.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
                     </div>
                   </div>
 
                   {/* Address */}
                   <div className="space-y-2">
-                    <Label className="text-gray-700">Address</Label>
+                    <Label className={theme.textSecondary}>Address</Label>
                     <div className="relative">
                       <MapPin className="absolute left-3 top-3 text-gray-400 w-4 h-4" />
                       <Textarea
                         {...register("address")}
-                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 pl-10 min-h-[40px]"
+                        className={`${inputClass} pl-10 min-h-[40px]`}
                         placeholder="Enter full address"
                       />
                     </div>
                   </div>
 
                   {/* Photo Upload */}
-                  <div className="space-y-3 border border-gray-200 rounded-lg p-4 bg-gray-50">
-                    <Label className="text-gray-700">Profile Photo</Label>
+                  <div className={`space-y-3 border rounded-lg p-4 ${theme.border} ${theme.bgSubtle}`}>
+                    <Label className={theme.textSecondary}>Profile Photo</Label>
                     <div className="flex items-center gap-4">
                       <div className="relative">
                         {photoPreview ? (
                           <img
                             src={photoPreview}
                             alt="Preview"
-                            className="w-24 h-24 rounded-full object-cover border border-gray-300"
+                            className="w-24 h-24 rounded-full object-cover border border-gray-300 dark:border-gray-600"
                           />
                         ) : (
-                          <div className="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center">
+                          <div className={`w-24 h-24 rounded-full ${theme.bgSubtle} flex items-center justify-center border ${theme.border}`}>
                             <User className="w-8 h-8 text-gray-400" />
                           </div>
                         )}
@@ -389,14 +390,14 @@ export default function TeacherDialogForm({
                           type="file"
                           accept="image/*"
                           onChange={handlePhotoChange}
-                          className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 mb-2"
+                          className={`${inputClass} mb-2`}
                         />
-                        <p className="text-xs text-gray-500">
+                        <p className={`text-xs ${theme.textMuted}`}>
                           {initialData && initialData.photoUrl
                             ? "Upload new photo to replace existing one"
                             : "Upload a profile photo (optional)"}
                         </p>
-                        <p className="text-xs text-gray-500">
+                        <p className={`text-xs ${theme.textMuted}`}>
                           Supported formats: JPG, PNG, WebP. Max size: 5MB
                         </p>
                       </div>
@@ -405,33 +406,26 @@ export default function TeacherDialogForm({
 
                   {/* Password Fields (only for new teacher) */}
                   {!initialData && (
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-gray-200 pt-4">
+                    <div className={`grid grid-cols-1 md:grid-cols-2 gap-4 border-t ${theme.border} pt-4`}>
                       <div className="space-y-2">
-                        <Label className="text-gray-700">Password *</Label>
+                        <Label className={theme.textSecondary}>Password *</Label>
                         <Input
                           type="password"
                           {...register("password", { required: "Password is required" })}
-                          className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.password ? "border-red-500" : ""}`}
+                          className={`${inputClass} ${errors.password ? "border-red-500" : ""}`}
                           placeholder="Enter password"
                         />
-                        {errors.password && (
-                          <p className="text-sm text-red-500">{errors.password.message}</p>
-                        )}
+                        {errors.password && <p className="text-sm text-red-500">{errors.password.message}</p>}
                       </div>
-
                       <div className="space-y-2">
-                        <Label className="text-gray-700">Confirm Password *</Label>
+                        <Label className={theme.textSecondary}>Confirm Password *</Label>
                         <Input
                           type="password"
-                          {...register("confirmPassword", {
-                            required: "Confirm your password",
-                          })}
-                          className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.confirmPassword ? "border-red-500" : ""}`}
+                          {...register("confirmPassword", { required: "Confirm your password" })}
+                          className={`${inputClass} ${errors.confirmPassword ? "border-red-500" : ""}`}
                           placeholder="Confirm password"
                         />
-                        {errors.confirmPassword && (
-                          <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>
-                        )}
+                        {errors.confirmPassword && <p className="text-sm text-red-500">{errors.confirmPassword.message}</p>}
                       </div>
                     </div>
                   )}
@@ -440,41 +434,34 @@ export default function TeacherDialogForm({
                 {/* Tab 2: Professional Information */}
                 <TabsContent value="professional" className="space-y-4 mt-0">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Designation */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Designation *</Label>
+                      <Label className={theme.textSecondary}>Designation *</Label>
                       <Input
                         {...register("designation", { required: "Designation is required" })}
-                        className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 ${errors.designation ? "border-red-500" : ""}`}
+                        className={`${inputClass} ${errors.designation ? "border-red-500" : ""}`}
                         placeholder="e.g., Senior Teacher, Head of Department"
                       />
-                      {errors.designation && (
-                        <p className="text-sm text-red-500">{errors.designation.message}</p>
-                      )}
+                      {errors.designation && <p className="text-sm text-red-500">{errors.designation.message}</p>}
                     </div>
 
-                    {/* Joining Date */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Joining Date *</Label>
+                      <Label className={theme.textSecondary}>Joining Date *</Label>
                       <div className="relative">
                         <Calendar className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 w-4 h-4" />
                         <Input
                           type="date"
                           {...register("joiningDate", { required: "Joining date is required" })}
-                          className={`bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500 pl-10 ${errors.joiningDate ? "border-red-500" : ""}`}
+                          className={`${inputClass} pl-10 ${errors.joiningDate ? "border-red-500" : ""}`}
                         />
                       </div>
-                      {errors.joiningDate && (
-                        <p className="text-sm text-red-500">{errors.joiningDate.message}</p>
-                      )}
+                      {errors.joiningDate && <p className="text-sm text-red-500">{errors.joiningDate.message}</p>}
                     </div>
 
-                    {/* National ID */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">National ID Number</Label>
+                      <Label className={theme.textSecondary}>National ID Number</Label>
                       <Input
                         {...register("nationalIdNo")}
-                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        className={inputClass}
                         placeholder="National ID number"
                       />
                     </div>
@@ -483,152 +470,38 @@ export default function TeacherDialogForm({
 
                 {/* Tab 3: Qualification */}
                 <TabsContent value="qualification" className="space-y-4 mt-0">
-                  <div className="flex items-center gap-3 mb-4 p-3 bg-blue-50 rounded-lg">
-                    <GraduationCap className="w-5 h-5 text-blue-600" />
-                    <p className="text-sm text-blue-700">
+                  <div className={`flex items-center gap-3 mb-4 p-3 rounded-lg ${theme.bgSubtle} ${theme.border}`}>
+                    <GraduationCap className="w-5 h-5 text-blue-600 dark:text-blue-400" />
+                    <p className={`text-sm ${theme.textSecondary}`}>
                       Last or highest qualification information
                     </p>
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Qualification Name */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Qualification Name</Label>
+                      <Label className={theme.textSecondary}>Qualification Name</Label>
                       <Input
                         {...register("lastQualification.name")}
-                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        className={inputClass}
                         placeholder="e.g., Master of Science, Bachelor of Arts"
                       />
                     </div>
-
-                    {/* Major/Subject */}
                     <div className="space-y-2">
-                      <Label className="text-gray-700">Major/Subject</Label>
+                      <Label className={theme.textSecondary}>Major/Subject</Label>
                       <Input
                         {...register("lastQualification.major")}
-                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        className={inputClass}
                         placeholder="e.g., Computer Science, Mathematics"
                       />
                     </div>
-
-                    {/* Institute */}
                     <div className="md:col-span-2 space-y-2">
-                      <Label className="text-gray-700">Institute/University</Label>
+                      <Label className={theme.textSecondary}>Institute/University</Label>
                       <Input
                         {...register("lastQualification.institute")}
-                        className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                        className={inputClass}
                         placeholder="e.g., University of Oxford, Harvard University"
                       />
                     </div>
-                  </div>
-                </TabsContent>
-
-                {/* Tab 4: Assignments */}
-                <TabsContent value="assignments" className="space-y-4 mt-0">
-                  {/* Assign Subjects */}
-                  <div className="space-y-3">
-                    <Label className="text-gray-700">Assign Subjects</Label>
-                    <Select
-                      onValueChange={(value) => {
-                        const current = watch("assignedSubjects");
-                        if (!current.includes(value)) {
-                          setValue("assignedSubjects", [...current, value]);
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                        <SelectValue placeholder="Select subjects to assign" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white">
-                        {subjects.map((sub) => (
-                          <SelectItem key={sub._id} value={sub._id} className="text-gray-900">
-                            {sub.name} ({sub.code})
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {/* Selected subjects */}
-                    {selectedSubjects.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {selectedSubjects.map((id) => {
-                          const sub = subjects.find((s) => s._id === id);
-                          return (
-                            <div
-                              key={id}
-                              className="flex items-center gap-1 bg-blue-100 text-blue-800 px-3 py-1.5 rounded-md text-sm"
-                            >
-                              {sub?.name}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setValue(
-                                    "assignedSubjects",
-                                    selectedSubjects.filter((x) => x !== id)
-                                  )
-                                }
-                                className="ml-1 text-blue-600 hover:text-blue-800"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </div>
-
-                  {/* Assign Classes */}
-                  <div className="space-y-3">
-                    <Label className="text-gray-700">Assign Classes</Label>
-                    <Select
-                      onValueChange={(value) => {
-                        const current = watch("assignedClasses");
-                        if (!current.includes(value)) {
-                          setValue("assignedClasses", [...current, value]);
-                        }
-                      }}
-                    >
-                      <SelectTrigger className="bg-white text-gray-900 border-gray-300 focus:border-blue-500 focus:ring-blue-500">
-                        <SelectValue placeholder="Select classes to assign" />
-                      </SelectTrigger>
-                      <SelectContent className="bg-white">
-                        {classes.map((cls) => (
-                          <SelectItem key={cls._id} value={cls._id} className="text-gray-900">
-                            {cls.name} {cls.section ? `- (${cls.section.name})` : ''}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-
-                    {/* Selected classes */}
-                    {selectedClasses.length > 0 && (
-                      <div className="flex flex-wrap gap-2 mt-2">
-                        {selectedClasses.map((id) => {
-                          const cls = classes.find((c) => c._id === id);
-                          return (
-                            <div
-                              key={id}
-                              className="flex items-center gap-1 bg-green-100 text-green-800 px-3 py-1.5 rounded-md text-sm"
-                            >
-                              {cls?.name}
-                              <button
-                                type="button"
-                                onClick={() =>
-                                  setValue(
-                                    "assignedClasses",
-                                    selectedClasses.filter((x) => x !== id)
-                                  )
-                                }
-                                className="ml-1 text-green-600 hover:text-green-800"
-                              >
-                                ×
-                              </button>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
                   </div>
                 </TabsContent>
               </form>
@@ -637,25 +510,37 @@ export default function TeacherDialogForm({
         </div>
 
         {/* Footer */}
-        <div className="sticky bottom-0 bg-white px-6 py-4 border-t border-gray-200 flex justify-between gap-3">
+        <div className={`sticky bottom-0 px-6 py-4 border-t ${theme.border} ${theme.bg} flex justify-between gap-3`}>
           <div className="flex gap-2">
             <Button
               type="button"
               variant="outline"
-              onClick={() => setActiveTab(activeTab === "basic" ? "assignments" :
-                activeTab === "professional" ? "basic" :
-                  activeTab === "qualification" ? "professional" : "qualification")}
-              className="text-gray-700 border-gray-300 hover:bg-gray-50"
+              onClick={() =>
+                setActiveTab(
+                  activeTab === "basic"
+                    ? "qualification"
+                    : activeTab === "professional"
+                    ? "basic"
+                    : "professional"
+                )
+              }
+              className={`${theme.border} ${theme.textSecondary} ${theme.bgHover}`}
             >
               Previous
             </Button>
             <Button
               type="button"
               variant="outline"
-              onClick={() => setActiveTab(activeTab === "basic" ? "professional" :
-                activeTab === "professional" ? "qualification" :
-                  activeTab === "qualification" ? "assignments" : "basic")}
-              className="text-gray-700 border-gray-300 hover:bg-gray-50"
+              onClick={() =>
+                setActiveTab(
+                  activeTab === "basic"
+                    ? "professional"
+                    : activeTab === "professional"
+                    ? "qualification"
+                    : "basic"
+                )
+              }
+              className={`${theme.border} ${theme.textSecondary} ${theme.bgHover}`}
             >
               Next
             </Button>
@@ -667,7 +552,7 @@ export default function TeacherDialogForm({
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
-              className="text-gray-700 border-gray-300 hover:bg-gray-50"
+              className={`${theme.border} ${theme.textSecondary} ${theme.bgHover}`}
             >
               Cancel
             </Button>
@@ -685,203 +570,3 @@ export default function TeacherDialogForm({
     </Dialog>
   );
 }
-
-
-// import { Button } from "@/components/ui/button";
-// import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
-// import { Input } from "@/components/ui/input";
-// import { useCreateTeacherMutation } from "@/features/apis/api";
-// import { useUpdateTeacherMutation } from "@/features/apis/teachersApi";
-// import { teacherSchema } from "@/schemas/teacherSchema";
-// import { zodResolver } from "@hookform/resolvers/zod";
-// import { useEffect } from "react";
-// import { useForm } from "react-hook-form";
-// import { toast } from "react-toastify";
-
-// export default function TeacherDialogForm({
-//   open,
-//   onOpenChange,
-//   initialData = null,
-//   onSaved
-// }) {
-//   const {
-//     register,
-//     handleSubmit,
-//     reset,
-//     formState: { errors, isDirty }
-//   } = useForm({
-//     resolver: zodResolver(teacherSchema),
-//     defaultValues: initialData || {
-//       name: "",
-//       email: "",
-//       password: "",
-//       phone: "",
-//       subjectIds: [],
-//       classIds: []
-//     }
-//   });
-
-//   const [createTeacher, { isLoading: creating }] = useCreateTeacherMutation();
-//   const [updateTeacher, { isLoading: updating }] = useUpdateTeacherMutation();
-
-//   useEffect(() => {
-//     reset(initialData || {
-//       name: "",
-//       email: "",
-//       password: "",
-//       phone: "",
-//       subjectIds: [],
-//       classIds: []
-//     });
-//   }, [initialData, reset]);
-
-//   const onSubmit = async (data) => {
-//     try {
-//       // For new teacher, ensure password is provided
-//       if (!initialData && !data.password) {
-//         toast.warn("Password is required for new teachers");
-//         return;
-//       }
-
-//       // Prepare the data for API
-//       const submitData = {
-//         name: data.name,
-//         email: data.email,
-//         phone: data.phone,
-//         subjectIds: data.subjectIds || [],
-//         classIds: data.classIds || [],
-//         ...(data.password && { password: data.password }) // Only include password if provided
-//       };
-
-//       if (initialData) {
-//         // For update, only send changed fields
-//         const updateData = {};
-//         if (data.name !== initialData.name) updateData.name = data.name;
-//         if (data.email !== initialData.email) updateData.email = data.email;
-//         if (data.phone !== initialData.phone) updateData.phone = data.phone;
-//         if (data.password) updateData.password = data.password;
-
-//         await updateTeacher({ id: initialData._id, ...updateData }).unwrap();
-//       } else {
-//         await createTeacher(submitData).unwrap();
-//       }
-
-//       onSaved?.();
-//       reset(); // Reset form after successful submission
-//     } catch (err) {
-//       console.error("Error saving teacher:", err);
-//       toast.error(err?.data?.message || "Error saving teacher");
-//     }
-//   };
-
-//   const isLoading = creating || updating;
-
-//   return (
-//     <Dialog open={open} onOpenChange={onOpenChange}>
-//       <DialogContent className="sm:max-w-[425px]">
-//         <DialogHeader>
-//           <DialogTitle>
-//             {initialData ? "Edit Teacher" : "Create New Teacher"}
-//           </DialogTitle>
-//         </DialogHeader>
-
-//         <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 mt-2">
-//           {/* Name Field */}
-//           <div className="space-y-2">
-//             <label htmlFor="name" className="text-sm font-medium">
-//               Full Name *
-//             </label>
-//             <Input
-//               id="name"
-//               {...register("name")}
-//               placeholder="Enter full name"
-//               className={errors.name ? "border-red-500" : ""}
-//             />
-//             {errors.name && (
-//               <p className="text-sm text-red-500">{errors.name.message}</p>
-//             )}
-//           </div>
-
-//           {/* Email Field */}
-//           <div className="space-y-2">
-//             <label htmlFor="email" className="text-sm font-medium">
-//               Email *
-//             </label>
-//             <Input
-//               id="email"
-//               type="email"
-//               {...register("email")}
-//               placeholder="Enter email address"
-//               className={errors.email ? "border-red-500" : ""}
-//             />
-//             {errors.email && (
-//               <p className="text-sm text-red-500">{errors.email.message}</p>
-//             )}
-//           </div>
-
-//           {/* Phone Field */}
-//           <div className="space-y-2">
-//             <label htmlFor="phone" className="text-sm font-medium">
-//               Phone Number
-//             </label>
-//             <Input
-//               id="phone"
-//               {...register("phone")}
-//               placeholder="Enter phone number"
-//             />
-//           </div>
-
-//           {/* Password Field - Only show for new teachers or when editing */}
-//           {!initialData && (
-//             <div className="space-y-2">
-//               <label htmlFor="password" className="text-sm font-medium">
-//                 Password *
-//               </label>
-//               <Input
-//                 id="password"
-//                 type="password"
-//                 {...register("password")}
-//                 placeholder="Enter password"
-//                 className={errors.password ? "border-red-500" : ""}
-//               />
-//               {errors.password && (
-//                 <p className="text-sm text-red-500">{errors.password.message}</p>
-//               )}
-//               <p className="text-xs text-gray-500">
-//                 Password must be at least 6 characters long
-//               </p>
-//             </div>
-//           )}
-
-//           {/* Optional: Password field for existing teachers to change password */}
-//           {initialData && (
-//             <div className="space-y-2">
-//               <label htmlFor="password" className="text-sm font-medium">
-//                 New Password (leave blank to keep current)
-//               </label>
-//               <Input
-//                 id="password"
-//                 type="password"
-//                 {...register("password")}
-//                 placeholder="Enter new password"
-//               />
-//               <p className="text-xs text-gray-500">
-//                 Leave blank to keep current password
-//               </p>
-//             </div>
-//           )}
-
-//           <DialogFooter>
-//             <Button
-//               type="submit"
-//               disabled={isLoading || (!initialData && !isDirty)}
-//               className="w-full sm:w-auto"
-//             >
-//               {isLoading ? "Saving..." : initialData ? "Save Changes" : "Create Teacher"}
-//             </Button>
-//           </DialogFooter>
-//         </form>
-//       </DialogContent>
-//     </Dialog>
-//   );
-// };

@@ -7,6 +7,7 @@ const { isAuthenticated, authorizeRoles } = require("../middleware/auth");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const Class = require("../models/Class");
+const { updateTeacherSubjectsAndClasses, updateClassSubjects, updateSubjectClasses } = require("../services/RoutineService");
 
 
 // 🎯 Get today's routine for a class
@@ -125,68 +126,6 @@ router.get("/class/:classId/slots", isAuthenticated, catchAsyncErrors(async (req
     next(error);
   }
 }));
-// router.get("/class/:classId/slots", isAuthenticated, catchAsyncErrors(async (req, res, next) => {
-//   try {
-//     const { day } = req.query;
-
-//     // Get class details including section
-//     const classData = await Class.findById(req.params.classId)
-//       .populate('section', 'name');
-
-//     if (!classData) {
-//       return next(new ErrorHandler("Class not found", 404));
-//     }
-
-//     // Get existing routines for the day
-//     const existingRoutines = await Routine.find({
-//       class: req.params.classId,
-//       // section: classData.section._id,
-//       day: day
-//     })
-//       .populate('subject', 'name code')
-//       .populate('teacher', 'user')
-//       .populate({
-//         path: 'teacher',
-//         populate: { path: 'user', select: 'name' }
-//       })
-//       .sort({ periodNumber: 1 });
-
-//     // Calculate next available period number
-//     const maxPeriods = 10;
-//     const occupiedPeriods = existingRoutines.map(r => r.periodNumber);
-//     let nextPeriodNumber = 1;
-
-//     // Find the first available period number
-//     while (occupiedPeriods.includes(nextPeriodNumber) && nextPeriodNumber <= maxPeriods) {
-//       nextPeriodNumber++;
-//     }
-
-//     // Generate slots
-//     const slots = [];
-//     for (let i = 1; i <= maxPeriods; i++) {
-//       const existingRoutine = existingRoutines.find(r => r.periodNumber === i);
-//       slots.push({
-//         periodNumber: i,
-//         isOccupied: !!existingRoutine,
-//         routine: existingRoutine || null,
-//         startTime: existingRoutine ? existingRoutine.startTime : null,
-//         endTime: existingRoutine ? existingRoutine.endTime : null
-//       });
-//     }
-
-//     res.status(200).json({
-//       success: true,
-//       day,
-//       class: classData,
-//       nextPeriodNumber: nextPeriodNumber > maxPeriods ? null : nextPeriodNumber,
-//       slots
-//     });
-
-//   } catch (error) {
-//     next(error);
-//   }
-// }));
-
 
 // 🎯 Create routine (click-to-add style) - UPDATED
 router.post("/", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsyncErrors(async (req, res, next) => {
@@ -257,6 +196,13 @@ router.post("/", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsync
       roomNumber,
       createdBy: req.user._id
     });
+
+    // Update relationships
+    const [teacherUpdates, classUpdated, subjectUpdated] = await Promise.all([
+      updateTeacherSubjectsAndClasses(teacher, subject, classId),
+      updateClassSubjects(classId, subject),
+      updateSubjectClasses(subject, classId)
+    ]);
 
     const populatedRoutine = await Routine.findById(routine._id)
       .populate({
@@ -345,29 +291,38 @@ router.get("/:id", isAuthenticated, catchAsyncErrors(async (req, res, next) => {
 // 🎯 Update routine
 router.put("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsyncErrors(async (req, res, next) => {
   try {
-    const { class: classId, subject, teacher, day, startTime, endTime, roomNumber } = req.body;
+    const { id } = req.params;
+    const {
+      class: classId,
+      subject,
+      teacher,
+      day,
+      startTime,
+      endTime,
+      roomNumber
+    } = req.body;
 
-    const routine = await Routine.findById(req.params.id);
+    // Find existing routine
+    const routine = await Routine.findById(id);
     if (!routine) {
       return next(new ErrorHandler("Routine not found", 404));
     }
 
+    // Store old values for comparison
+    const oldSubject = routine.subject;
+    const oldTeacher = routine.teacher;
+    const oldClass = routine.class;
+
     // Check conflicts (excluding current routine)
     const conflictingRoutine = await Routine.findOne({
-      _id: { $ne: req.params.id },
+      _id: { $ne: id },
       teacher,
       day,
       $or: [
         {
           $and: [
-            { startTime: { $lte: startTime } },
-            { endTime: { $gt: startTime } }
-          ]
-        },
-        {
-          $and: [
             { startTime: { $lt: endTime } },
-            { endTime: { $gte: endTime } }
+            { endTime: { $gt: startTime } }
           ]
         }
       ]
@@ -377,8 +332,21 @@ router.put("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsy
       return next(new ErrorHandler("Teacher has conflicting schedule at this time", 400));
     }
 
+    // Check period conflicts for the class
+    const periodConflict = await Routine.findOne({
+      _id: { $ne: id },
+      class: classId,
+      day,
+      periodNumber: routine.periodNumber
+    });
+
+    if (periodConflict) {
+      return next(new ErrorHandler(`Period ${routine.periodNumber} is already occupied for this class`, 400));
+    }
+
+    // Update the routine
     const updatedRoutine = await Routine.findByIdAndUpdate(
-      req.params.id,
+      id,
       {
         class: classId,
         subject,
@@ -389,10 +357,70 @@ router.put("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsy
         roomNumber
       },
       { new: true, runValidators: true }
-    )
-      .populate('class', 'name')
+    );
+
+    // ================================================================
+    // Handle relationship updates
+    // ================================================================
+
+    // 1. Handle Subject changes
+    if (subject !== oldSubject) {
+      // Remove old subject from old teacher (if not used elsewhere)
+      await removeSubjectFromTeacher(oldTeacher, oldSubject);
+      await removeSubjectFromClass(oldClass, oldSubject);
+      await removeClassFromSubject(oldSubject, oldClass);
+
+      // Add new subject to new teacher and class
+      await updateTeacherSubjectsAndClasses(teacher, subject, classId);
+      await updateClassSubjects(classId, subject);
+      await updateSubjectClasses(subject, classId);
+    }
+
+    // 2. Handle Teacher changes
+    if (teacher !== oldTeacher) {
+      // Remove old class from old teacher if no other routine uses it
+      const oldTeacherRoutines = await Routine.find({
+        teacher: oldTeacher,
+        class: oldClass
+      });
+
+      if (oldTeacherRoutines.length === 0) {
+        // Remove class from old teacher's classes array
+        await removeClassFromTeacher(oldTeacher, oldClass);
+      }
+
+      // Add new teacher to the class
+      await updateTeacherSubjectsAndClasses(teacher, subject, classId);
+    }
+
+    // 3. Handle Class changes
+    if (classId !== oldClass) {
+      // Remove subject from old class if no other routine uses it
+      const oldClassRoutines = await Routine.find({
+        class: oldClass,
+        subject: oldSubject
+      });
+
+      if (oldClassRoutines.length === 0) {
+        await removeSubjectFromClass(oldClass, oldSubject);
+      }
+
+      // Add new class to subject
+      await updateSubjectClasses(subject, classId);
+      await updateClassSubjects(classId, subject);
+    }
+
+    // Populate the updated routine
+    const populatedRoutine = await Routine.findById(updatedRoutine._id)
+      .populate({
+        path: 'class',
+        select: 'name section',
+        populate: {
+          path: 'section',
+          select: 'name'
+        }
+      })
       .populate('subject', 'name code')
-      .populate('teacher', 'user')
       .populate({
         path: 'teacher',
         populate: { path: 'user', select: 'name' }
@@ -401,7 +429,7 @@ router.put("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsy
     res.status(200).json({
       success: true,
       message: "Routine updated successfully",
-      routine: updatedRoutine
+      routine: populatedRoutine
     });
 
   } catch (error) {
@@ -409,7 +437,74 @@ router.put("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsy
   }
 }));
 
+// router.put("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsyncErrors(async (req, res, next) => {
+//   try {
+//     const { class: classId, subject, teacher, day, startTime, endTime, roomNumber } = req.body;
+
+//     const routine = await Routine.findById(req.params.id);
+//     if (!routine) {
+//       return next(new ErrorHandler("Routine not found", 404));
+//     }
+
+//     // Check conflicts (excluding current routine)
+//     const conflictingRoutine = await Routine.findOne({
+//       _id: { $ne: req.params.id },
+//       teacher,
+//       day,
+//       $or: [
+//         {
+//           $and: [
+//             { startTime: { $lte: startTime } },
+//             { endTime: { $gt: startTime } }
+//           ]
+//         },
+//         {
+//           $and: [
+//             { startTime: { $lt: endTime } },
+//             { endTime: { $gte: endTime } }
+//           ]
+//         }
+//       ]
+//     });
+
+//     if (conflictingRoutine) {
+//       return next(new ErrorHandler("Teacher has conflicting schedule at this time", 400));
+//     }
+
+//     const updatedRoutine = await Routine.findByIdAndUpdate(
+//       req.params.id,
+//       {
+//         class: classId,
+//         subject,
+//         teacher,
+//         day,
+//         startTime,
+//         endTime,
+//         roomNumber
+//       },
+//       { new: true, runValidators: true }
+//     )
+//       .populate('class', 'name')
+//       .populate('subject', 'name code')
+//       .populate('teacher', 'user')
+//       .populate({
+//         path: 'teacher',
+//         populate: { path: 'user', select: 'name' }
+//       });
+
+//     res.status(200).json({
+//       success: true,
+//       message: "Routine updated successfully",
+//       routine: updatedRoutine
+//     });
+
+//   } catch (error) {
+//     next(error);
+//   }
+// }));
+
 // 🎯 Delete routine
+
 router.delete("/:id", isAuthenticated, authorizeRoles("admin", "teacher"), catchAsyncErrors(async (req, res, next) => {
   try {
     const routine = await Routine.findById(req.params.id);

@@ -9,6 +9,7 @@ import { Switch } from "@/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { useCreateAnnouncementMutation, useUpdateAnnouncementMutation } from "@/features/apis/api";
+import { useAppSelector } from "@/features/store";
 import { handleApiError } from "@/utils/handleApiErrors";
 import React, { useEffect } from "react";
 import { useForm } from "react-hook-form";
@@ -26,11 +27,52 @@ const TARGET_AUDIENCES = [
     'students', 'teachers', 'parents', 'all'
 ];
 
+// Theme hook
+const useTheme = () => {
+    const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+    return {
+        isDarkMode,
+        bg: isDarkMode ? "bg-gray-900" : "bg-white",
+        text: isDarkMode ? "text-white" : "text-gray-900",
+        textSecondary: isDarkMode ? "text-gray-300" : "text-gray-700",
+        textMuted: isDarkMode ? "text-gray-400" : "text-gray-500",
+        border: isDarkMode ? "border-gray-700" : "border-gray-200",
+        bgInput: isDarkMode ? "bg-gray-800" : "bg-white",
+        borderInput: isDarkMode ? "border-gray-700" : "border-gray-300",
+        focusRing: "focus:ring-blue-500 focus:border-blue-500",
+        bgSubtle: isDarkMode ? "bg-gray-800/50" : "bg-gray-50",
+        bgHover: isDarkMode ? "hover:bg-gray-800" : "hover:bg-gray-50",
+        placeholder: isDarkMode ? "placeholder:text-gray-500" : "placeholder:text-gray-400",
+        switch: isDarkMode ? "data-[state=checked]:bg-blue-600 data-[state=unchecked]:bg-gray-700" : "",
+        tabs: {
+            list: isDarkMode ? "bg-gray-800" : "bg-gray-100",
+            trigger: isDarkMode 
+                ? "text-gray-400 data-[state=active]:bg-gray-700 data-[state=active]:text-white" 
+                : "text-gray-600 data-[state=active]:bg-white data-[state=active]:text-gray-900",
+        },
+        select: {
+            trigger: isDarkMode ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900",
+            content: isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white",
+            item: isDarkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-900 hover:bg-gray-100",
+        },
+        badge: {
+            outline: isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800" : "border-gray-300 text-gray-700 hover:bg-gray-50",
+            default: isDarkMode ? "bg-blue-600 text-white hover:bg-blue-700" : "bg-blue-600 text-white hover:bg-blue-700",
+        },
+        button: {
+            primary: isDarkMode ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white",
+            outline: isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50",
+        },
+        toggleContainer: isDarkMode ? "bg-gray-800/50 border-gray-700" : "bg-white border-gray-200",
+    };
+};
+
 export default function AnnouncementForm({
     open,
     onOpenChange,
     initialData
 }) {
+    const theme = useTheme();
     const [activeTab, setActiveTab] = React.useState("content");
 
     const [createAnnouncement, { isLoading: creating }] = useCreateAnnouncementMutation();
@@ -57,7 +99,6 @@ export default function AnnouncementForm({
     useEffect(() => {
         if (open) {
             if (initialData) {
-                // Edit mode
                 const startDate = initialData.startDate ? new Date(initialData.startDate).toISOString().split('T')[0] : "";
                 const endDate = initialData.endDate ? new Date(initialData.endDate).toISOString().split('T')[0] : "";
 
@@ -74,7 +115,6 @@ export default function AnnouncementForm({
                     targetAudience: initialData.targetAudience || ["all"]
                 });
             } else {
-                // Create mode
                 reset({
                     title: "",
                     content: "",
@@ -93,23 +133,18 @@ export default function AnnouncementForm({
 
     const onSubmit = async (data) => {
         try {
-            // Convert targetAudience to array if it's a string (from select)
             const audience = Array.isArray(data.targetAudience) ? data.targetAudience : [data.targetAudience];
 
             const announcementData = {
                 ...data,
                 targetAudience: audience,
-                // If endDate is empty, set to null
                 endDate: data.endDate || null
             };
 
             if (initialData) {
-                console.log("called update announcement")
                 await updateAnnouncement({ id: initialData._id, ...announcementData }).unwrap();
                 toast.success("Announcement updated successfully");
             } else {
-                console.log("called create announcement")
-
                 await createAnnouncement(announcementData).unwrap();
                 toast.success("Announcement created successfully");
             }
@@ -131,29 +166,32 @@ export default function AnnouncementForm({
 
     const isLoading = creating || updating;
 
+    // Input base class
+    const inputClass = `${theme.bgInput} ${theme.borderInput} ${theme.focusRing} text-gray-900 dark:text-white ${theme.placeholder}`;
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+            <DialogContent className={`sm:max-w-[700px] max-h-[90vh] overflow-y-auto ${theme.bg} ${theme.text}`}>
                 <DialogHeader>
-                    <DialogTitle>
+                    <DialogTitle className={theme.text}>
                         {initialData ? "Edit Announcement" : "Create New Announcement"}
                     </DialogTitle>
                 </DialogHeader>
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-3">
-                            <TabsTrigger value="content">Content</TabsTrigger>
-                            <TabsTrigger value="settings">Settings</TabsTrigger>
-                            <TabsTrigger value="audience">Audience</TabsTrigger>
+                        <TabsList className={`grid w-full grid-cols-3 ${theme.tabs.list}`}>
+                            <TabsTrigger value="content" className={theme.tabs.trigger}>Content</TabsTrigger>
+                            <TabsTrigger value="settings" className={theme.tabs.trigger}>Settings</TabsTrigger>
+                            <TabsTrigger value="audience" className={theme.tabs.trigger}>Audience</TabsTrigger>
                         </TabsList>
 
-                        <TabsContent value="content" className="space-y-4">
+                        {/* Tab 1: Content */}
+                        <TabsContent value="content" className="space-y-4 mt-4">
                             {/* Title */}
                             <div className="space-y-2">
-                                <Label htmlFor="title">Announcement Title *</Label>
+                                <Label className={theme.textSecondary}>Announcement Title *</Label>
                                 <Input
-                                    id="title"
                                     {...register("title", {
                                         required: "Title is required",
                                         minLength: {
@@ -162,7 +200,7 @@ export default function AnnouncementForm({
                                         }
                                     })}
                                     placeholder="e.g., School Holiday Announcement"
-                                    className={errors.title ? "border-red-500" : ""}
+                                    className={`${inputClass} ${errors.title ? "border-red-500" : ""}`}
                                 />
                                 {errors.title && (
                                     <p className="text-sm text-red-500">{errors.title.message}</p>
@@ -171,23 +209,22 @@ export default function AnnouncementForm({
 
                             {/* Excerpt */}
                             <div className="space-y-2">
-                                <Label htmlFor="excerpt">Excerpt</Label>
+                                <Label className={theme.textSecondary}>Excerpt</Label>
                                 <Textarea
-                                    id="excerpt"
                                     {...register("excerpt")}
                                     placeholder="Brief summary of the announcement (optional)"
                                     rows={3}
+                                    className={`${inputClass} resize-none`}
                                 />
-                                <p className="text-xs text-gray-500">
+                                <p className={`text-xs ${theme.textMuted}`}>
                                     Short summary used in listings and notifications.
                                 </p>
                             </div>
 
                             {/* Content */}
                             <div className="space-y-2">
-                                <Label htmlFor="content">Content *</Label>
+                                <Label className={theme.textSecondary}>Content *</Label>
                                 <Textarea
-                                    id="content"
                                     {...register("content", {
                                         required: "Content is required",
                                         minLength: {
@@ -197,7 +234,7 @@ export default function AnnouncementForm({
                                     })}
                                     placeholder="Full announcement content..."
                                     rows={8}
-                                    className={errors.content ? "border-red-500" : ""}
+                                    className={`${inputClass} resize-none ${errors.content ? "border-red-500" : ""}`}
                                 />
                                 {errors.content && (
                                     <p className="text-sm text-red-500">{errors.content.message}</p>
@@ -205,21 +242,22 @@ export default function AnnouncementForm({
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="settings" className="space-y-4">
+                        {/* Tab 2: Settings */}
+                        <TabsContent value="settings" className="space-y-4 mt-4">
                             <div className="grid grid-cols-2 gap-4">
                                 {/* Category */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="category">Category</Label>
+                                    <Label className={theme.textSecondary}>Category</Label>
                                     <Select
                                         onValueChange={(value) => setValue("category", value)}
                                         value={watch("category")}
                                     >
-                                        <SelectTrigger>
+                                        <SelectTrigger className={theme.select.trigger}>
                                             <SelectValue placeholder="Select category" />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className={theme.select.content}>
                                             {CATEGORIES.map(category => (
-                                                <SelectItem key={category} value={category}>
+                                                <SelectItem key={category} value={category} className={theme.select.item}>
                                                     {category.charAt(0).toUpperCase() + category.slice(1)}
                                                 </SelectItem>
                                             ))}
@@ -229,17 +267,17 @@ export default function AnnouncementForm({
 
                                 {/* Priority */}
                                 <div className="space-y-2">
-                                    <Label htmlFor="priority">Priority</Label>
+                                    <Label className={theme.textSecondary}>Priority</Label>
                                     <Select
                                         onValueChange={(value) => setValue("priority", value)}
                                         value={watch("priority")}
                                     >
-                                        <SelectTrigger>
+                                        <SelectTrigger className={theme.select.trigger}>
                                             <SelectValue placeholder="Select priority" />
                                         </SelectTrigger>
-                                        <SelectContent>
+                                        <SelectContent className={theme.select.content}>
                                             {PRIORITIES.map(priority => (
-                                                <SelectItem key={priority} value={priority}>
+                                                <SelectItem key={priority} value={priority} className={theme.select.item}>
                                                     {priority.charAt(0).toUpperCase() + priority.slice(1)}
                                                 </SelectItem>
                                             ))}
@@ -251,12 +289,11 @@ export default function AnnouncementForm({
                             {/* Dates */}
                             <div className="grid grid-cols-2 gap-4">
                                 <div className="space-y-2">
-                                    <Label htmlFor="startDate">Start Date *</Label>
+                                    <Label className={theme.textSecondary}>Start Date *</Label>
                                     <Input
-                                        id="startDate"
                                         type="date"
                                         {...register("startDate", { required: "Start date is required" })}
-                                        className={errors.startDate ? "border-red-500" : ""}
+                                        className={`${inputClass} ${errors.startDate ? "border-red-500" : ""}`}
                                     />
                                     {errors.startDate && (
                                         <p className="text-sm text-red-500">{errors.startDate.message}</p>
@@ -264,13 +301,13 @@ export default function AnnouncementForm({
                                 </div>
 
                                 <div className="space-y-2">
-                                    <Label htmlFor="endDate">End Date (Optional)</Label>
+                                    <Label className={theme.textSecondary}>End Date (Optional)</Label>
                                     <Input
-                                        id="endDate"
                                         type="date"
                                         {...register("endDate")}
+                                        className={inputClass}
                                     />
-                                    <p className="text-xs text-gray-500">
+                                    <p className={`text-xs ${theme.textMuted}`}>
                                         Leave empty if the announcement doesn't expire.
                                     </p>
                                 </div>
@@ -278,61 +315,80 @@ export default function AnnouncementForm({
 
                             {/* Toggles */}
                             <div className="space-y-4">
-                                <div className="flex items-center justify-between p-4 border rounded-lg">
+                                <div className={`flex items-center justify-between p-4 border rounded-lg ${theme.toggleContainer}`}>
                                     <div>
-                                        <Label htmlFor="isPublished" className="text-base">Published</Label>
-                                        <p className="text-sm text-gray-500">
+                                        <Label className={`text-base ${theme.text}`}>Published</Label>
+                                        <p className={`text-sm ${theme.textMuted}`}>
                                             {isPublished ? "Announcement is visible to public" : "Announcement is in draft mode"}
                                         </p>
                                     </div>
                                     <Switch
                                         checked={isPublished}
                                         onCheckedChange={(checked) => setValue("isPublished", checked)}
+                                        className={theme.switch}
                                     />
                                 </div>
 
-                                <div className="flex items-center justify-between p-4 border rounded-lg">
+                                <div className={`flex items-center justify-between p-4 border rounded-lg ${theme.toggleContainer}`}>
                                     <div>
-                                        <Label htmlFor="isPinned" className="text-base">Pinned</Label>
-                                        <p className="text-sm text-gray-500">
+                                        <Label className={`text-base ${theme.text}`}>Pinned</Label>
+                                        <p className={`text-sm ${theme.textMuted}`}>
                                             Pinned announcements appear at the top of the list
                                         </p>
                                     </div>
                                     <Switch
                                         checked={watch("isPinned")}
                                         onCheckedChange={(checked) => setValue("isPinned", checked)}
+                                        className={theme.switch}
                                     />
                                 </div>
                             </div>
                         </TabsContent>
 
-                        <TabsContent value="audience" className="space-y-4">
+                        {/* Tab 3: Audience */}
+                        <TabsContent value="audience" className="space-y-4 mt-4">
                             <div className="space-y-2">
-                                <Label>Target Audience</Label>
-                                <p className="text-sm text-gray-500">
+                                <Label className={theme.textSecondary}>Target Audience</Label>
+                                <p className={`text-sm ${theme.textMuted}`}>
                                     Select who should see this announcement
                                 </p>
                                 <div className="flex flex-wrap gap-2 mt-2">
-                                    {TARGET_AUDIENCES.map(audience => (
-                                        <Badge
-                                            key={audience}
-                                            variant={targetAudience.includes(audience) ? "default" : "outline"}
-                                            className="cursor-pointer"
-                                            onClick={() => toggleAudience(audience)}
-                                        >
-                                            {audience}
-                                        </Badge>
-                                    ))}
+                                    {TARGET_AUDIENCES.map(audience => {
+                                        const isSelected = targetAudience.includes(audience);
+                                        return (
+                                            <Badge
+                                                key={audience}
+                                                variant={isSelected ? "default" : "outline"}
+                                                className={`cursor-pointer transition-all ${
+                                                    isSelected 
+                                                        ? theme.badge.default 
+                                                        : theme.badge.outline
+                                                }`}
+                                                onClick={() => toggleAudience(audience)}
+                                            >
+                                                {audience}
+                                            </Badge>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         </TabsContent>
                     </Tabs>
 
-                    <DialogFooter>
-                        <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    <DialogFooter className={`border-t ${theme.border} pt-4`}>
+                        <Button 
+                            type="button" 
+                            variant="outline" 
+                            onClick={() => onOpenChange(false)}
+                            className={theme.button.outline}
+                        >
                             Cancel
                         </Button>
-                        <Button type="submit" disabled={isLoading}>
+                        <Button 
+                            type="submit" 
+                            disabled={isLoading}
+                            className={theme.button.primary}
+                        >
                             {isLoading ? "Saving..." : initialData ? "Update Announcement" : "Create Announcement"}
                         </Button>
                     </DialogFooter>

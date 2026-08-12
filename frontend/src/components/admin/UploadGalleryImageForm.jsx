@@ -241,15 +241,15 @@ export default function UploadGalleryImageForm({ open, onOpenChange, onSuccess }
 
     return (
         <Dialog open={open} onOpenChange={handleDialogClose}>
-            <DialogContent className={`max-w-2xl ${theme.dialog}`}>
+            <DialogContent className={`max-w-2xl max-h-[90vh] overflow-auto ${theme.dialog}`}>
                 <DialogHeader>
                     <DialogTitle className={isDarkMode ? "text-white" : "text-gray-900"}>
                         Upload New Image
                     </DialogTitle>
                 </DialogHeader>
-                <div className="space-y-6 py-4">
+                <div className="space-y-4 py-4">
                     {/* Image Upload Area */}
-                    <div className={`border-2 border-dashed ${isDarkMode ? "border-gray-700" : "border-gray-300"} rounded-lg p-8 text-center hover:border-blue-500 transition-colors`}>
+                    <div className={`border-2 border-dashed ${isDarkMode ? "border-gray-700" : "border-gray-300"} rounded-lg p-4 text-center hover:border-blue-500 transition-colors`}>
                         {formData.imagePreview ? (
                             <div className="relative">
                                 <img
@@ -298,7 +298,7 @@ export default function UploadGalleryImageForm({ open, onOpenChange, onSuccess }
 
                     {/* Upload Progress */}
                     {uploadProgress > 0 && uploadProgress < 100 && (
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                             <div className={`w-full ${isDarkMode ? "bg-gray-700" : "bg-gray-200"} rounded-full h-2`}>
                                 <div
                                     className="bg-blue-600 rounded-full h-2 transition-all duration-300"
@@ -313,7 +313,7 @@ export default function UploadGalleryImageForm({ open, onOpenChange, onSuccess }
 
                     {/* Form Fields */}
                     <div className="grid grid-cols-2 gap-4">
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                             <Label className={theme.label}>Title *</Label>
                             <Input
                                 placeholder="Enter image title"
@@ -322,7 +322,7 @@ export default function UploadGalleryImageForm({ open, onOpenChange, onSuccess }
                                 className={theme.input}
                             />
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-1">
                             <Label className={theme.label}>Category *</Label>
                             <Select
                                 value={formData.category}
@@ -342,7 +342,7 @@ export default function UploadGalleryImageForm({ open, onOpenChange, onSuccess }
                         </div>
                     </div>
 
-                    <div className="space-y-2">
+                    <div className="space-y-1">
                         <Label className={theme.label}>Description</Label>
                         <Textarea
                             placeholder="Enter image description"

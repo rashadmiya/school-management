@@ -19,7 +19,7 @@ const studentSchema = new mongoose.Schema({
         enum: ['regular', 'scholarship', 'staff_ward'],
         default: 'regular'
     },
-    transportRoute: { type: mongoose.Schema.Types.ObjectId, ref: 'TransportRoute' },
+    // transportRoute: { type: mongoose.Schema.Types.ObjectId, ref: 'TransportRoute' },
     financialNotes: String,
     // Add payments reference
     payments: [{ type: mongoose.Schema.Types.ObjectId, ref: 'Payment' }],

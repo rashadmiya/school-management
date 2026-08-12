@@ -8,10 +8,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { useForm, Controller } from "react-hook-form";
 import { useCreateClassMutation, useUpdateClassMutation } from "@/features/apis/classesApi";
 import { toast } from "react-toastify";
-import { Check, X, AlertCircle, BookOpen} from "lucide-react";
+import { Check, X, AlertCircle, BookOpen } from "lucide-react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+import { useAppSelector } from "@/features/store";
 
 export default function ClassForm({ open, onOpenChange, initialData, teachers = [], subjects = [], sections = [] }) {
+  const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
   const [createClass, { isLoading: creating }] = useCreateClassMutation();
   const [updateClass, { isLoading: updating }] = useUpdateClassMutation();
   const [availableSections, setAvailableSections] = useState(sections);
@@ -42,6 +44,40 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
   const watchedAcademicYear = watch("academicYear");
   const selectedSubjects = watch("subjects") || [];
 
+  // Theme-based classes
+  const theme = {
+    dialog: isDarkMode ? "bg-gray-900 border-gray-800 text-white" : "bg-white border-gray-200 text-gray-900",
+    label: isDarkMode ? "text-gray-300" : "text-gray-700",
+    input: isDarkMode 
+      ? "bg-gray-800 border-gray-700 text-white placeholder:text-gray-500 focus:ring-blue-500" 
+      : "bg-white border-gray-300 text-gray-900 placeholder:text-gray-400 focus:ring-blue-500",
+    selectTrigger: isDarkMode 
+      ? "bg-gray-800 border-gray-700 text-white" 
+      : "bg-white border-gray-300 text-gray-900",
+    selectContent: isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white border-gray-200",
+    selectItem: isDarkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-900 hover:bg-gray-100",
+    alert: isDarkMode 
+      ? "bg-red-900/20 border-red-800 text-red-400" 
+      : "bg-red-50 border-red-200 text-red-800",
+    button: {
+      primary: isDarkMode 
+        ? "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-800/50 disabled:text-gray-400" 
+        : "bg-blue-600 hover:bg-blue-700 text-white disabled:bg-blue-300",
+      outline: isDarkMode 
+        ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" 
+        : "border-gray-300 text-gray-700 hover:bg-gray-50",
+    },
+    subjectTag: isDarkMode 
+      ? "bg-gray-800 border-gray-700" 
+      : "bg-white border-gray-200",
+    subjectTagText: isDarkMode ? "text-white" : "text-gray-900",
+    subjectTagSub: isDarkMode ? "text-gray-400" : "text-gray-500",
+    emptyState: isDarkMode ? "border-gray-700 bg-gray-800/50 text-gray-400" : "border-gray-200 bg-gray-50 text-gray-500",
+    helperText: isDarkMode ? "text-gray-400" : "text-gray-500",
+    errorText: "text-red-500",
+    divider: isDarkMode ? "border-gray-700" : "border-gray-200",
+  };
+
   // Generate current academic year
   const getCurrentAcademicYear = () => {
     const currentYear = new Date().getFullYear();
@@ -63,19 +99,14 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
   // Check for duplicate class
   const checkDuplicateClass = async () => {
     if (!watchedName || !watchedSection || !watchedAcademicYear) return false;
-    
-    // This would ideally be an API call, but we'll handle it on the backend
     return false;
   };
 
   // Filter available sections based on class name and academic year
   useEffect(() => {
     if (initialData) {
-      // When editing, show all sections
       setAvailableSections(sections);
     } else {
-      // When creating, filter sections that don't already have this class name
-      // This is a simple client-side check - backend will do proper validation
       setAvailableSections(sections);
     }
   }, [initialData, sections, watchedName, watchedAcademicYear]);
@@ -83,7 +114,6 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
   useEffect(() => {
     if (open) {
       if (initialData) {
-        // Format data for editing
         const editData = {
           name: initialData.name || "",
           supervisor: initialData.supervisor ? initialData.supervisor._id : "",
@@ -108,7 +138,6 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
 
   const onSubmit = async (data) => {
     try {
-      // Ensure subjects is an array (handle undefined case)
       const formData = {
         ...data,
         subjects: Array.isArray(data.subjects) ? data.subjects : []
@@ -131,14 +160,14 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto">
+      <DialogContent className={`sm:max-w-[700px] max-h-[90vh] overflow-y-auto ${theme.dialog}`}>
         <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
+          <DialogTitle className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
             {initialData ? (
               <>
                 <span>Edit Class: {initialData.name}</span>
                 {initialData.section?.name && (
-                  <span className="text-sm font-normal text-gray-500">
+                  <span className={`text-sm font-normal ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
                     (Section {initialData.section.name})
                   </span>
                 )}
@@ -154,7 +183,7 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Class Name */}
             <div className="space-y-2">
-              <Label htmlFor="name">
+              <Label htmlFor="name" className={theme.label}>
                 Class Name *
                 {watchedName && (
                   <span className="ml-2 text-xs text-green-600">
@@ -170,22 +199,22 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                   maxLength: { value: 20, message: "Class name is too long" }
                 })}
                 placeholder="e.g., 10, 11, 12, Nursery, KG"
-                className={errors.name ? "border-red-500" : ""}
+                className={`${theme.input} ${errors.name ? "border-red-500" : ""}`}
                 disabled={isLoading}
               />
               {errors.name ? (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <p className={`text-xs ${theme.errorText} mt-1 flex items-center gap-1`}>
                   <AlertCircle className="w-3 h-3" />
                   {errors.name.message}
                 </p>
               ) : (
-                <p className="text-xs text-gray-500 mt-1">Enter class name (e.g., 10, 11A, KG)</p>
+                <p className={`text-xs ${theme.helperText} mt-1`}>Enter class name (e.g., 10, 11A, KG)</p>
               )}
             </div>
 
             {/* Section */}
             <div className="space-y-2">
-              <Label htmlFor="section">
+              <Label htmlFor="section" className={theme.label}>
                 Section *
                 {watchedSection && (
                   <span className="ml-2 text-xs text-green-600">
@@ -203,15 +232,15 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                     onValueChange={field.onChange}
                     disabled={isLoading}
                   >
-                    <SelectTrigger className={errors.section ? "border-red-500" : ""}>
+                    <SelectTrigger className={`${theme.selectTrigger} ${errors.section ? "border-red-500" : ""}`}>
                       <SelectValue placeholder="Select section" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className={theme.selectContent}>
                       {availableSections.map((section) => (
-                        <SelectItem key={section._id} value={section._id}>
+                        <SelectItem key={section._id} value={section._id} className={theme.selectItem}>
                           <div className="flex flex-col">
                             <span>{section.name}</span>
-                            <span className="text-xs text-gray-500">
+                            <span className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
                               Capacity: {section.currentStrength}/{section.capacity}
                               {section.isActive ? " • Active" : " • Inactive"}
                             </span>
@@ -228,12 +257,12 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                 )}
               />
               {errors.section ? (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <p className={`text-xs ${theme.errorText} mt-1 flex items-center gap-1`}>
                   <AlertCircle className="w-3 h-3" />
                   {errors.section.message}
                 </p>
               ) : (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className={`text-xs ${theme.helperText} mt-1`}>
                   Select a section for this class
                 </p>
               )}
@@ -244,7 +273,7 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Academic Year */}
             <div className="space-y-2">
-              <Label htmlFor="academicYear">
+              <Label htmlFor="academicYear" className={theme.label}>
                 Academic Year *
                 {watchedAcademicYear && !errors.academicYear && (
                   <span className="ml-2 text-xs text-green-600">
@@ -259,16 +288,16 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                   validate: validateAcademicYear
                 })}
                 placeholder="e.g., 2024-2025"
-                className={errors.academicYear ? "border-red-500" : ""}
+                className={`${theme.input} ${errors.academicYear ? "border-red-500" : ""}`}
                 disabled={isLoading}
               />
               {errors.academicYear ? (
-                <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                <p className={`text-xs ${theme.errorText} mt-1 flex items-center gap-1`}>
                   <AlertCircle className="w-3 h-3" />
                   {errors.academicYear.message}
                 </p>
               ) : (
-                <p className="text-xs text-gray-500 mt-1">
+                <p className={`text-xs ${theme.helperText} mt-1`}>
                   Format: YYYY-YYYY (e.g., 2024-2025)
                 </p>
               )}
@@ -276,7 +305,7 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
 
             {/* Supervisor */}
             <div className="space-y-2">
-              <Label htmlFor="supervisor">Class Supervisor</Label>
+              <Label htmlFor="supervisor" className={theme.label}>Class Supervisor</Label>
               <Controller
                 name="supervisor"
                 control={control}
@@ -286,20 +315,20 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                     onValueChange={(value) => field.onChange(value === "none" ? "" : value)}
                     disabled={isLoading}
                   >
-                    <SelectTrigger>
+                    <SelectTrigger className={theme.selectTrigger}>
                       <SelectValue placeholder="Select supervisor (optional)" />
                     </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="none">
-                        <span className="text-gray-500">No Supervisor</span>
+                    <SelectContent className={theme.selectContent}>
+                      <SelectItem value="none" className={theme.selectItem}>
+                        <span className={isDarkMode ? "text-gray-400" : "text-gray-500"}>No Supervisor</span>
                       </SelectItem>
                       {teachers
                         .filter(teacher => teacher.isActive !== false)
                         .map((teacher) => (
-                          <SelectItem key={teacher._id} value={teacher._id}>
+                          <SelectItem key={teacher._id} value={teacher._id} className={theme.selectItem}>
                             <div className="flex flex-col">
                               <span>{teacher.user?.name || teacher.name}</span>
-                              <span className="text-xs text-gray-500">
+                              <span className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
                                 {teacher.designation || "Teacher"}
                                 {teacher.user?.email ? ` • ${teacher.user.email}` : ''}
                               </span>
@@ -311,19 +340,19 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                   </Select>
                 )}
               />
-              <p className="text-xs text-gray-500 mt-1">
+              <p className={`text-xs ${theme.helperText} mt-1`}>
                 Assign a teacher as class supervisor (optional)
               </p>
             </div>
           </div>
 
-          {/* Subjects Section */}
+          {/* ===== SUBJECTS SECTION COMMENTED OUT =====
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <Label htmlFor="subjects">
+              <Label className={theme.label}>
                 Subjects
                 {selectedSubjects.length > 0 && (
-                  <span className="ml-2 text-xs text-gray-500">
+                  <span className={`ml-2 text-xs ${theme.helperText}`}>
                     ({selectedSubjects.length} selected)
                   </span>
                 )}
@@ -334,7 +363,7 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                   variant="ghost"
                   size="sm"
                   onClick={() => setValue("subjects", [])}
-                  className="text-xs h-7"
+                  className={`text-xs h-7 ${isDarkMode ? "text-gray-400 hover:text-white hover:bg-gray-800" : ""}`}
                   disabled={isLoading}
                 >
                   <X className="w-3 h-3 mr-1" />
@@ -343,62 +372,60 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
               )}
             </div>
 
-            {/* Subject Selector */}
             <div className="space-y-2">
               <Select
                 value="__select__"
                 onValueChange={(value) => {
-                   if (value === "__select__") return;
+                  if (value === "__select__") return;
                   if (!selectedSubjects.includes(value)) {
                     setValue("subjects", [...selectedSubjects, value]);
                   }
                 }}
                 disabled={isLoading}
               >
-                <SelectTrigger>
+                <SelectTrigger className={theme.selectTrigger}>
                   <SelectValue placeholder="Add subjects to this class" />
                 </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__select__" disabled>
-                  Select a subject
-                </SelectItem>
-
-                {subjects
-                  .filter(subject => subject.isActive !== false)
-                  .map(subject => (
-                    <SelectItem
-                      key={subject._id}
-                      value={subject._id}
-                      disabled={selectedSubjects.includes(subject._id)}
-                    >
-                      <div className="flex justify-between items-center">
-                        <span>{subject.name} ({subject.code})</span>
-                        {selectedSubjects.includes(subject._id) && (
-                          <Check className="w-4 h-4 text-green-600" />
-                        )}
-                      </div>
-                    </SelectItem>
-                  ))}
-              </SelectContent>
-
+                <SelectContent className={theme.selectContent}>
+                  <SelectItem value="__select__" disabled>
+                    Select a subject
+                  </SelectItem>
+                  {subjects
+                    .filter(subject => subject.isActive !== false)
+                    .map(subject => (
+                      <SelectItem
+                        key={subject._id}
+                        value={subject._id}
+                        disabled={selectedSubjects.includes(subject._id)}
+                        className={theme.selectItem}
+                      >
+                        <div className="flex justify-between items-center">
+                          <span>{subject.name} ({subject.code})</span>
+                          {selectedSubjects.includes(subject._id) && (
+                            <Check className="w-4 h-4 text-green-600" />
+                          )}
+                        </div>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
               </Select>
-              
-              {/* Selected Subjects Display */}
+
               {selectedSubjects.length > 0 ? (
                 <div className="pt-2">
-                  <div className="flex flex-wrap gap-2 p-3 border rounded-md bg-gray-50 min-h-[60px] max-h-[150px] overflow-y-auto">
+                  <div className={`flex flex-wrap gap-2 p-3 border rounded-md min-h-[60px] max-h-[150px] overflow-y-auto ${theme.emptyState}`}>
                     {selectedSubjects.map((subjectId) => {
                       const subject = subjects.find(s => s._id === subjectId);
                       if (!subject) return null;
-                      
                       return (
                         <div
                           key={subjectId}
-                          className="flex items-center gap-1 bg-white border border-gray-200 px-3 py-2 rounded-lg shadow-sm"
+                          className={`flex items-center gap-1 border px-3 py-2 rounded-lg shadow-sm ${theme.subjectTag}`}
                         >
                           <div className="flex-1 min-w-0">
-                            <p className="font-medium text-sm truncate">{subject.name}</p>
-                            <p className="text-xs text-gray-500">{subject.code}</p>
+                            <p className={`font-medium text-sm truncate ${theme.subjectTagText}`}>
+                              {subject.name}
+                            </p>
+                            <p className={`text-xs ${theme.subjectTagSub}`}>{subject.code}</p>
                           </div>
                           <button
                             type="button"
@@ -406,7 +433,7 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                               const updated = selectedSubjects.filter(id => id !== subjectId);
                               setValue("subjects", updated);
                             }}
-                            className="ml-2 text-gray-400 hover:text-red-600 transition-colors"
+                            className={`ml-2 ${isDarkMode ? "text-gray-400 hover:text-red-400" : "text-gray-400 hover:text-red-600"} transition-colors`}
                             disabled={isLoading}
                             aria-label={`Remove ${subject.name}`}
                           >
@@ -416,12 +443,12 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
                       );
                     })}
                   </div>
-                  <p className="text-xs text-gray-500 mt-2">
+                  <p className={`text-xs ${theme.helperText} mt-2`}>
                     Click on the X icon to remove a subject
                   </p>
                 </div>
               ) : (
-                <div className="border rounded-md p-4 text-center text-gray-500 bg-gray-50">
+                <div className={`border rounded-md p-4 text-center ${theme.emptyState}`}>
                   <BookOpen className="w-6 h-6 mx-auto mb-2 opacity-50" />
                   <p className="text-sm">No subjects selected yet</p>
                   <p className="text-xs mt-1">Add subjects using the dropdown above</p>
@@ -429,10 +456,11 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
               )}
             </div>
           </div>
+          ===== END COMMENTED SUBJECTS SECTION ===== */}
 
           {/* Validation Alert */}
           {(errors.name || errors.section || errors.academicYear) && (
-            <Alert variant="destructive">
+            <Alert variant="destructive" className={theme.alert}>
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 Please fix the errors above before submitting
@@ -440,19 +468,20 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
             </Alert>
           )}
 
-          <DialogFooter className="pt-4 border-t">
+          <DialogFooter className={`pt-4 border-t ${theme.divider}`}>
             <Button
               type="button"
               variant="outline"
               onClick={() => onOpenChange(false)}
               disabled={isLoading}
+              className={theme.button.outline}
             >
               Cancel
             </Button>
             <Button
               type="submit"
               disabled={isLoading || Object.keys(errors).length > 0}
-              className="min-w-[120px]"
+              className={`min-w-[120px] ${theme.button.primary}`}
             >
               {isLoading ? (
                 <>
@@ -471,173 +500,3 @@ export default function ClassForm({ open, onOpenChange, initialData, teachers = 
     </Dialog>
   );
 }
-
-// // components/classes/ClassForm.jsx (Updated to handle subjects overflow)
-// import React, { useEffect } from "react";
-// import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-// import { Button } from "@/components/ui/button";
-// import { Input } from "@/components/ui/input";
-// import { Label } from "@/components/ui/label";
-// import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-// import { useForm } from "react-hook-form";
-// import { useCreateClassMutation, useUpdateClassMutation } from "@/features/apis/classesApi";
-// import { toast } from "react-toastify";
-
-// export default function ClassForm({ open, onOpenChange, initialData, teachers = [], subjects = [], sections = [] }) {
-//   const [createClass, { isLoading: creating }] = useCreateClassMutation();
-//   const [updateClass, { isLoading: updating }] = useUpdateClassMutation();
-
-//   const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
-//     defaultValues: { name: "", supervisor: "", section: "", subjects: [], academicYear: "" }
-//   });
-
-//   useEffect(() => {
-//     if (open) {
-//       if (initialData) {
-//         reset({
-//           name: initialData.name ?? "",
-//           supervisor: initialData.supervisor ? initialData.supervisor._id : "",
-//           section: initialData.section ? initialData.section._id : "",
-//           subjects: initialData.subjects?.map(s => s._id) ?? [],
-//           academicYear: initialData.academicYear || ""
-//         });
-//       } else {
-//         const currentYear = new Date().getFullYear();
-//         reset({
-//           name: "",
-//           supervisor: "",
-//           section: "",
-//           subjects: [],
-//           academicYear: `${currentYear}-${currentYear + 1}`
-//         });
-//       }
-//     }
-//   }, [open, initialData, reset]);
-
-//   const onSubmit = async (data) => {
-//     try {
-//       if (initialData) {
-//         await updateClass({ id: initialData._id, ...data }).unwrap();
-//       } else {
-//         await createClass(data).unwrap();
-//       }
-//       onOpenChange(false);
-//     } catch (err) {
-//       toast.error(err?.data?.message || "Error saving class");
-//     }
-//   };
-
-//   const isLoading = creating || updating;
-//   const selectedSubjects = watch("subjects") || [];
-
-//   return (
-//     <Dialog open={open} onOpenChange={onOpenChange}>
-//       <DialogContent className="sm:max-w-[700px] max-h-[90vh] overflow-y-auto"> {/* Added max-height and overflow-y-auto to the main content */}
-//         <DialogHeader>
-//           <DialogTitle>{initialData ? "Edit Class" : "Create New Class"}</DialogTitle>
-//         </DialogHeader>
-//         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
-          
-//           {/* Grid Layout for Primary Fields */}
-//           <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-
-//             {/* Class Name */}
-//             <div className="space-y-2">
-//               <Label htmlFor="name">Class Name *</Label>
-//               <Input id="name" {...register("name", { required: "Class name is required" })} placeholder="e.g., 10, 11, 12" className={errors.name ? "border-red-500" : ""} />
-//               {errors.name && <p className="text-xs text-red-500 mt-1">{errors.name.message}</p>}
-//             </div>
-
-//             {/* Section */}
-//             <div className="space-y-2">
-//               <Label htmlFor="section">Section *</Label>
-//               <Select onValueChange={(value) => setValue("section", value)} value={watch("section")}>
-//                 <SelectTrigger className={errors.section ? "border-red-500" : ""}><SelectValue placeholder="Select section" /></SelectTrigger>
-//                 <SelectContent>{sections.map((section) => (<SelectItem key={section._id} value={section._id}>{section.name}</SelectItem>))}</SelectContent>
-//               </Select>
-//               {errors.section && <p className="text-xs text-red-500 mt-1">Section is required</p>}
-//             </div>
-
-//             {/* Academic Year */}
-//             <div className="space-y-2">
-//               <Label htmlFor="academicYear">Academic Year *</Label>
-//               <Input id="academicYear" {...register("academicYear", { required: "Academic year is required", pattern: { value: /^\d{4}-\d{4}$/, message: "Format must be YYYY-YYYY" } })} placeholder="e.g., 2024-2025" className={errors.academicYear ? "border-red-500" : ""} />
-//               {errors.academicYear && <p className="text-xs text-red-500 mt-1">{errors.academicYear.message}</p>}
-//             </div>
-//           </div>
-//           {/* End Grid Layout */}
-
-//           {/* Supervisor */}
-//           <div className="space-y-2">
-//             <Label htmlFor="supervisor">Class Supervisor</Label>
-//             <Select onValueChange={(value) => setValue("supervisor", value === "none" ? "" : value)} value={watch("supervisor") || "none"}>
-//               <SelectTrigger><SelectValue placeholder="Select supervisor (optional)" /></SelectTrigger>
-//               <SelectContent>
-//                 <SelectItem value="none">No Supervisor</SelectItem>
-//                 {teachers.map((teacher) => (<SelectItem key={teacher._id} value={teacher._id}>{teacher.user?.name}</SelectItem>))}
-//               </SelectContent>
-//             </Select>
-//           </div>
-
-//           {/* Subjects (Kept as full width) */}
-//           <div className="space-y-2">
-//             <Label htmlFor="subjects">Subjects</Label>
-//             {/* The Select component for adding subjects */}
-//             <Select onValueChange={(value) => { 
-//                 const currentSubjects = watch("subjects") || []; 
-//                 if (!currentSubjects.includes(value)) { 
-//                     setValue("subjects", [...currentSubjects, value]); 
-//                 } 
-//             }} value=""> 
-//               <SelectTrigger><SelectValue placeholder="Add subjects to class" /></SelectTrigger>
-//               <SelectContent>
-//                 {subjects.map((subject) => (
-//                   <SelectItem key={subject._id} value={subject._id} disabled={selectedSubjects.includes(subject._id)}>
-//                     {subject.name} ({subject.code})
-//                   </SelectItem>
-//                 ))}
-//               </SelectContent>
-//             </Select>
-            
-//             {/* Selected Subjects Display (Container with fixed height and scroll) */}
-//             {selectedSubjects.length > 0 && (
-//               <div className="pt-2">
-//                 <Label className="block mb-2 text-sm font-medium">Selected Subjects:</Label>
-//                 <div className="flex flex-wrap gap-2 p-2 border rounded-md bg-gray-50 min-h-10 max-h-[150px] overflow-y-auto"> 
-//                 {/* ^^^ KEY CHANGE: Added max-h-[150px] and overflow-y-auto ^^^ */}
-//                   {selectedSubjects.map((subjectId) => {
-//                     const subject = subjects.find(s => s._id === subjectId);
-//                     // Use a badge or tag style
-//                     return (
-//                       <div key={subjectId} className="flex items-center gap-1 bg-blue-50 text-blue-800 border border-blue-200 px-3 py-1 rounded-full text-sm font-medium">
-//                         {subject?.name || "Unknown Subject"}
-//                         <button 
-//                           type="button" 
-//                           onClick={() => { 
-//                             const updated = selectedSubjects.filter(id => id !== subjectId); 
-//                             setValue("subjects", updated); 
-//                           }} 
-//                           className="text-blue-600 hover:text-blue-900 ml-1 leading-none"
-//                           aria-label={`Remove ${subject?.name}`}
-//                         >
-//                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-//                             <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-//                           </svg>
-//                         </button>
-//                       </div>
-//                     );
-//                   })}
-//                 </div>
-//               </div>
-//             )}
-//           </div>
-          
-//           <DialogFooter className="pt-4">
-//             <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={isLoading}>Cancel</Button>
-//             <Button type="submit" disabled={isLoading}>{isLoading ? "Saving..." : initialData ? "Update Class" : "Create Class"}</Button>
-//           </DialogFooter>
-//         </form>
-//       </DialogContent>
-//     </Dialog>
-//   );
-// }

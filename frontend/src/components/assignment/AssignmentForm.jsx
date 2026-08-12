@@ -1,4 +1,4 @@
-// components/assignments/AssignmentForm.jsx
+// components/assignment/AssignmentForm.jsx
 import React, { useEffect } from "react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -8,289 +8,290 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useForm } from "react-hook-form";
 import { useCreateAssignmentMutation, useUpdateAssignmentMutation } from "@/features/apis/assignmentsApi";
+import { useAppSelector } from "@/features/store";
 import { handleApiError } from "@/utils/handleApiErrors";
+import { AlertCircle, Check } from "lucide-react";
+
+// Theme hook
+const useTheme = () => {
+    const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
+    return {
+        isDarkMode,
+        bg: isDarkMode ? "bg-gray-900" : "bg-white",
+        text: isDarkMode ? "text-white" : "text-gray-900",
+        textSecondary: isDarkMode ? "text-gray-300" : "text-gray-700",
+        textMuted: isDarkMode ? "text-gray-400" : "text-gray-500",
+        border: isDarkMode ? "border-gray-700" : "border-gray-200",
+        bgInput: isDarkMode ? "bg-gray-800" : "bg-white",
+        borderInput: isDarkMode ? "border-gray-700" : "border-gray-300",
+        focusRing: "focus:ring-blue-500 focus:border-blue-500",
+        placeholder: isDarkMode ? "placeholder:text-gray-500" : "placeholder:text-gray-400",
+        dialog: isDarkMode ? "bg-gray-900 border-gray-800" : "bg-white border-gray-200",
+        select: {
+            trigger: isDarkMode ? "bg-gray-800 border-gray-700 text-white" : "bg-white border-gray-300 text-gray-900",
+            content: isDarkMode ? "bg-gray-800 border-gray-700" : "bg-white",
+            item: isDarkMode ? "text-gray-300 hover:bg-gray-700" : "text-gray-900 hover:bg-gray-100",
+        },
+        button: {
+            primary: isDarkMode ? "bg-blue-600 hover:bg-blue-700 text-white" : "bg-blue-600 hover:bg-blue-700 text-white",
+            outline: isDarkMode ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" : "border-gray-300 text-gray-700 hover:bg-gray-50",
+        },
+        divider: isDarkMode ? "border-gray-700" : "border-gray-200",
+        errorText: "text-red-500",
+        helperText: isDarkMode ? "text-gray-400" : "text-gray-500",
+    };
+};
 
 export default function AssignmentForm({
-  open,
-  onOpenChange,
-  initialData,
-  classes = [],
-  subjects = []
+    open,
+    onOpenChange,
+    initialData,
+    classes = [],
+    subjects = []
 }) {
-  const [createAssignment, { isLoading: creating }] = useCreateAssignmentMutation();
-  const [updateAssignment, { isLoading: updating }] = useUpdateAssignmentMutation();
+    const theme = useTheme();
 
-  const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
-    defaultValues: {
-      title: "",
-      description: "",
-      class: "",
-      subject: "",
-      dueDate: "",
-      mark:""
-    }
-  });
+    const [createAssignment, { isLoading: creating }] = useCreateAssignmentMutation();
+    const [updateAssignment, { isLoading: updating }] = useUpdateAssignmentMutation();
 
-  useEffect(() => {
-    if (open) {
-      if (initialData) {
-        // Edit mode
-        const dueDate = initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : "";
+    const { register, handleSubmit, reset, setValue, watch, formState: { errors } } = useForm({
+        defaultValues: {
+            title: "",
+            description: "",
+            class: "",
+            subject: "",
+            dueDate: "",
+            mark: ""
+        }
+    });
 
-        reset({
-          title: initialData.title || "",
-          description: initialData.description || "",
-          class: initialData.class?._id || initialData.class || "",
-          subject: initialData.subject?._id || initialData.subject || "",
-          dueDate: dueDate,
-          mark: initialData.mark || "",
+    // Watch form values
+    const watchedTitle = watch("title");
+    const watchedMark = watch("mark");
 
-        });
-      } else {
-        // Create mode
-        reset({
-          title: "",
-          description: "",
-          class: "",
-          subject: "",
-          dueDate: "",
-          mark:"",
-        });
-      }
-    }
-  }, [open, initialData, reset]);
+    // Input base class
+    const inputClass = `${theme.bgInput} ${theme.borderInput} ${theme.focusRing} text-gray-900 dark:text-white ${theme.placeholder}`;
 
-  const onSubmit = async (data) => {
-    try {
-      if (initialData) {
-        await updateAssignment({ id: initialData._id, ...data }).unwrap();
-      } else {
-        await createAssignment(data).unwrap();
-      }
-      onOpenChange(false);
-    } catch (err) {
-      console.error("Error saving assignment:", err);
-      handleApiError(err || "Error saving assignment");
-    }
-  };
+    useEffect(() => {
+        if (open) {
+            if (initialData) {
+                const dueDate = initialData.dueDate ? new Date(initialData.dueDate).toISOString().split('T')[0] : "";
 
-  const isLoading = creating || updating;
+                reset({
+                    title: initialData.title || "",
+                    description: initialData.description || "",
+                    class: initialData.class?._id || initialData.class || "",
+                    subject: initialData.subject?._id || initialData.subject || "",
+                    dueDate: dueDate,
+                    mark: initialData.mark || "",
+                });
+            } else {
+                reset({
+                    title: "",
+                    description: "",
+                    class: "",
+                    subject: "",
+                    dueDate: "",
+                    mark: "",
+                });
+            }
+        }
+    }, [open, initialData, reset]);
 
-  // Get subjects filtered by selected class
-  const selectedClass = watch("class");
-  const filteredSubjects = selectedClass
-    ? subjects.filter(subject =>
-      // In a real app, you might have class-subject relationships
-      true // For now, show all subjects
-    )
-    : subjects;
+    const onSubmit = async (data) => {
+        try {
+            if (initialData) {
+                await updateAssignment({ id: initialData._id, ...data }).unwrap();
+            } else {
+                await createAssignment(data).unwrap();
+            }
+            onOpenChange(false);
+        } catch (err) {
+            console.error("Error saving assignment:", err);
+            handleApiError(err || "Error saving assignment");
+        }
+    };
 
-  // Calculate minimum date (today)
-  const today = new Date().toISOString().split('T')[0];
+    const isLoading = creating || updating;
 
-  return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[550px]">
-        <DialogHeader>
-          <DialogTitle>
-            {initialData ? "Edit Assignment" : "Create New Assignment"}
-          </DialogTitle>
-        </DialogHeader>
+    // Get subjects filtered by selected class
+    const selectedClass = watch("class");
+    const filteredSubjects = selectedClass
+        ? subjects.filter(subject => true)
+        : subjects;
 
-        <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-          {/* Assignment Title */}
-          <div className="space-y-2">
-            <Label htmlFor="title">Assignment Title *</Label>
-            <Input
-              id="title"
-              {...register("title", {
-                required: "Assignment title is required",
-                minLength: {
-                  value: 3,
-                  message: "Title must be at least 3 characters"
-                }
-              })}
-              placeholder="e.g., Chapter 5 Exercises, Research Paper, etc."
-              className={errors.title ? "border-red-500" : ""}
-            />
-            {errors.title && (
-              <p className="text-sm text-red-500">{errors.title.message}</p>
-            )}
-          </div>
+    // Calculate minimum date (today)
+    const today = new Date().toISOString().split('T')[0];
 
-          <div className="w-full flex flex-row gap-2">
-            {/* Class Selection */}
-            <div className="space-y-2 w-full">
-              <Label htmlFor="class">Class *</Label>
-              <Select onValueChange={(value) => setValue("class", value)} value={watch("class")}>
-                <SelectTrigger className={errors.class ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select class" />
-                </SelectTrigger>
-                <SelectContent>
-                  {classes.map((classItem) => (
-                    <SelectItem key={classItem._id} value={classItem._id}>
-                      {`${classItem.name} ( ${classItem.section || "" } )`}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.class && (
-                <p className="text-sm text-red-500">Class is required</p>
-              )}
-            </div>
+    return (
+        <Dialog open={open} onOpenChange={onOpenChange}>
+            <DialogContent className={`sm:max-w-[550px] max-h-[90vh] overflow-y-auto ${theme.dialog}`}>
+                <DialogHeader>
+                    <DialogTitle className={theme.text}>
+                        {initialData ? "Edit Assignment" : "Create New Assignment"}
+                    </DialogTitle>
+                </DialogHeader>
 
-            {/* Subject Selection */}
-            <div className="space-y-2 w-full">
-              <Label htmlFor="subject">Subject *</Label>
-              <Select onValueChange={(value) => setValue("subject", value)} value={watch("subject")}>
-                <SelectTrigger className={errors.subject ? "border-red-500" : ""}>
-                  <SelectValue placeholder="Select subject" />
-                </SelectTrigger>
-                <SelectContent>
-                  {filteredSubjects.map((subject) => (
-                    <SelectItem key={subject._id} value={subject._id}>
-                      {subject.name} ({subject.code})
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              {errors.subject && (
-                <p className="text-sm text-red-500">Subject is required</p>
-              )}
-            </div>
-          </div>
+                <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
+                    {/* Assignment Title */}
+                    <div className="space-y-2">
+                        <Label className={theme.textSecondary}>
+                            Assignment Title *
+                            {watchedTitle && !errors.title && (
+                                <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                                    <Check className="w-3 h-3 inline" /> Valid
+                                </span>
+                            )}
+                        </Label>
+                        <Input
+                            {...register("title", {
+                                required: "Assignment title is required",
+                                minLength: {
+                                    value: 3,
+                                    message: "Title must be at least 3 characters"
+                                }
+                            })}
+                            placeholder="e.g., Chapter 5 Exercises, Research Paper, etc."
+                            className={`${inputClass} ${errors.title ? "border-red-500" : ""}`}
+                        />
+                        {errors.title && (
+                            <p className={`text-sm ${theme.errorText}`}>{errors.title.message}</p>
+                        )}
+                    </div>
 
-          <div className="w-full flex flex-row gap-2">
-            <div className="space-y-2 w-full">
-              <Label htmlFor="title">Assignment Marks *</Label>
-              <Input
-                id="mark"
-                {...register("mark", {
-                  required: "Assignment mark is required",
-                  minLength: {
-                    value: 1,
-                    message: "Mark must be at least 1 characters"
-                  }
-                })}
-                placeholder="e.g., 10"
-                className={errors.mark ? "border-red-500" : ""}
-              />
-              {errors.mark && (
-                <p className="text-sm text-red-500">{errors.mark.message}</p>
-              )}
-            </div>
-            {/* Due Date */}
-            <div className="space-y-2 w-full">
-              <Label htmlFor="dueDate">Due Date *</Label>
-              <Input
-                id="dueDate"
-                type="date"
-                min={today}
-                {...register("dueDate", {
-                  required: "Due date is required",
-                  validate: {
-                    futureDate: (value) => {
-                      const selectedDate = new Date(value);
-                      const today = new Date();
-                      today.setHours(0, 0, 0, 0);
-                      return selectedDate >= today || "Due date must be in the future";
-                    }
-                  }
-                })}
-                className={errors.dueDate ? "border-red-500" : ""}
-              />
-              {errors.dueDate && (
-                <p className="text-sm text-red-500">{errors.dueDate.message}</p>
-              )}
-            </div>
-          </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Class Selection */}
+                        <div className="space-y-2">
+                            <Label className={theme.textSecondary}>Class *</Label>
+                            <Select 
+                                onValueChange={(value) => setValue("class", value)} 
+                                value={watch("class")}
+                            >
+                                <SelectTrigger className={`${theme.select.trigger} ${errors.class ? "border-red-500" : ""}`}>
+                                    <SelectValue placeholder="Select class" />
+                                </SelectTrigger>
+                                <SelectContent className={theme.select.content}>
+                                    {classes.map((classItem) => (
+                                        <SelectItem key={classItem._id} value={classItem._id} className={theme.select.item}>
+                                            {classItem.name} {classItem.section ? `(${classItem.section})` : ''}
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.class && (
+                                <p className={`text-sm ${theme.errorText}`}>Class is required</p>
+                            )}
+                        </div>
 
+                        {/* Subject Selection */}
+                        <div className="space-y-2">
+                            <Label className={theme.textSecondary}>Subject *</Label>
+                            <Select 
+                                onValueChange={(value) => setValue("subject", value)} 
+                                value={watch("subject")}
+                            >
+                                <SelectTrigger className={`${theme.select.trigger} ${errors.subject ? "border-red-500" : ""}`}>
+                                    <SelectValue placeholder="Select subject" />
+                                </SelectTrigger>
+                                <SelectContent className={theme.select.content}>
+                                    {filteredSubjects.map((subject) => (
+                                        <SelectItem key={subject._id} value={subject._id} className={theme.select.item}>
+                                            {subject.name} ({subject.code})
+                                        </SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            {errors.subject && (
+                                <p className={`text-sm ${theme.errorText}`}>Subject is required</p>
+                            )}
+                        </div>
+                    </div>
 
-          {/* Description */}
-          <div className="space-y-2">
-            <Label htmlFor="description">Description</Label>
-            <Textarea
-              id="description"
-              {...register("description")}
-              placeholder="Provide detailed instructions for the assignment..."
-              rows={4}
-            />
-            <p className="text-xs text-gray-500">
-              Optional. Include any specific requirements, guidelines, or resources.
-            </p>
-          </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        {/* Assignment Marks */}
+                        <div className="space-y-2">
+                            <Label className={theme.textSecondary}>
+                                Assignment Marks *
+                                {watchedMark && !errors.mark && (
+                                    <span className="ml-2 text-xs text-green-600 dark:text-green-400">
+                                        <Check className="w-3 h-3 inline" /> Valid
+                                    </span>
+                                )}
+                            </Label>
+                            <Input
+                                {...register("mark", {
+                                    required: "Assignment mark is required",
+                                    minLength: {
+                                        value: 1,
+                                        message: "Mark must be at least 1"
+                                    }
+                                })}
+                                placeholder="e.g., 10"
+                                className={`${inputClass} ${errors.mark ? "border-red-500" : ""}`}
+                            />
+                            {errors.mark && (
+                                <p className={`text-sm ${theme.errorText}`}>{errors.mark.message}</p>
+                            )}
+                        </div>
 
-          <DialogFooter>
-            <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-              Cancel
-            </Button>
-            <Button type="submit" disabled={isLoading}>
-              {isLoading ? "Saving..." : initialData ? "Update Assignment" : "Create Assignment"}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
-  );
+                        {/* Due Date */}
+                        <div className="space-y-2">
+                            <Label className={theme.textSecondary}>Due Date *</Label>
+                            <Input
+                                type="date"
+                                min={today}
+                                {...register("dueDate", {
+                                    required: "Due date is required",
+                                    validate: {
+                                        futureDate: (value) => {
+                                            const selectedDate = new Date(value);
+                                            const today = new Date();
+                                            today.setHours(0, 0, 0, 0);
+                                            return selectedDate >= today || "Due date must be in the future";
+                                        }
+                                    }
+                                })}
+                                className={`${inputClass} ${errors.dueDate ? "border-red-500" : ""}`}
+                            />
+                            {errors.dueDate && (
+                                <p className={`text-sm ${theme.errorText}`}>{errors.dueDate.message}</p>
+                            )}
+                        </div>
+                    </div>
+
+                    {/* Description */}
+                    <div className="space-y-2">
+                        <Label className={theme.textSecondary}>Description</Label>
+                        <Textarea
+                            {...register("description")}
+                            placeholder="Provide detailed instructions for the assignment..."
+                            rows={4}
+                            className={`${inputClass} resize-none`}
+                        />
+                        <p className={`text-xs ${theme.helperText}`}>
+                            Optional. Include any specific requirements, guidelines, or resources.
+                        </p>
+                    </div>
+
+                    <DialogFooter className={`pt-4 border-t ${theme.divider}`}>
+                        <Button
+                            type="button"
+                            variant="outline"
+                            onClick={() => onOpenChange(false)}
+                            className={theme.button.outline}
+                        >
+                            Cancel
+                        </Button>
+                        <Button
+                            type="submit"
+                            disabled={isLoading}
+                            className={theme.button.primary}
+                        >
+                            {isLoading ? "Saving..." : initialData ? "Update Assignment" : "Create Assignment"}
+                        </Button>
+                    </DialogFooter>
+                </form>
+            </DialogContent>
+        </Dialog>
+    );
 }
-
-// import React, { useEffect } from "react";
-// import { Dialog, DialogTrigger, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-// import { useForm } from "react-hook-form";
-// import { zodResolver } from "@hookform/resolvers/zod";
-// import { assignmentSchema } from "@/schemas/assignmentSchema";
-// import { useCreateAssignmentMutation, useUpdateAssignmentMutation } from "@/features/apis/assignmentsApi";
-// import { useGetClassesQuery } from "@/features/apis/classesApi";
-// import { useGetSubjectsQuery } from "@/features/apis/subjectsApi";
-// import { Input } from "@/components/ui/input";
-// import { Button } from "@/components/ui/button";
-
-// export default function AssignmentForm({ initialData=null, triggerLabel="New Assignment", onSaved }) {
-//   const { register, handleSubmit, reset, formState: { errors } } = useForm({ resolver: zodResolver(assignmentSchema), defaultValues: initialData || {}});
-//   const [createAssignment, { isLoading: creating }] = useCreateAssignmentMutation();
-//   const [updateAssignment, { isLoading: updating }] = useUpdateAssignmentMutation();
-//   const { data: classesData } = useGetClassesQuery({ page:1, limit:200 });
-//   const { data: subjectsData } = useGetSubjectsQuery({ page:1, limit:200 });
-
-//   useEffect(()=> reset(initialData || {}), [initialData, reset]);
-
-//   const onSubmit = async (data) => {
-//     try {
-//       if (initialData) await updateAssignment({ id: initialData._id, ...data }).unwrap();
-//       else await createAssignment(data).unwrap();
-//       onSaved && onSaved();
-//     } catch (err) {
-//       alert(err?.data?.message || "Error saving assignment");
-//     }
-//   };
-
-//   return (
-//     <Dialog>
-//       <DialogTrigger asChild><Button>{triggerLabel}</Button></DialogTrigger>
-//       <DialogContent>
-//         <DialogHeader><DialogTitle>{initialData ? "Edit Assignment" : "New Assignment"}</DialogTitle></DialogHeader>
-//         <form onSubmit={handleSubmit(onSubmit)} className="space-y-3 mt-2">
-//           <Input {...register("title")} placeholder="Title" />
-//           <div>
-//             <select {...register("classId")} className="w-full p-2 border rounded">
-//               <option value="">-- Class --</option>
-//               {(classesData?.docs||[]).map(c => <option key={c._id} value={c._id}>{c.name}</option>)}
-//             </select>
-//           </div>
-//           <div>
-//             <select {...register("subjectId")} className="w-full p-2 border rounded">
-//               <option value="">-- Subject --</option>
-//               {(subjectsData?.docs||[]).map(s => <option key={s._id} value={s._id}>{s.name}</option>)}
-//             </select>
-//           </div>
-//           <div>
-//             <Input {...register("dueDate")} type="date" />
-//           </div>
-//           <DialogFooter>
-//             <Button type="submit" disabled={creating || updating}>{initialData ? "Save" : "Create"}</Button>
-//           </DialogFooter>
-//         </form>
-//       </DialogContent>
-//     </Dialog>
-//   );
-// }
