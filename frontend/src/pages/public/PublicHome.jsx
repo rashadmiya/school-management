@@ -231,17 +231,101 @@ export default function PublicHome() {
 
             {/* Statistics Section */}
             <section className="py-16 bg-gray-50">
-                {/* ... existing statistics code ... */}
+                <div className="container mx-auto px-4">
+                    <div className="text-center mb-12">
+                        <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                            Our School at a Glance
+                        </h2>
+                        <p className="text-xl text-gray-600">
+                            Proudly serving our community with excellence
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
+                        <div className="text-center">
+                            <div className="text-4xl font-bold text-blue-600 mb-2">
+                                {statistics.totalStudents || "1,250"}
+                            </div>
+                            <div className="text-gray-600">Students</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-4xl font-bold text-green-600 mb-2">
+                                {statistics.totalTeachers || "85"}
+                            </div>
+                            <div className="text-gray-600">Teachers</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-4xl font-bold text-purple-600 mb-2">
+                                {statistics.totalClasses || "45"}
+                            </div>
+                            <div className="text-gray-600">Classes</div>
+                        </div>
+                        <div className="text-center">
+                            <div className="text-4xl font-bold text-orange-600 mb-2">
+                                {settings.SCHOOL_ESTABLISHED || "2000"}
+                            </div>
+                            <div className="text-gray-600">Established</div>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             {/* Features Section */}
             <section className="py-16">
-                {/* ... existing features code ... */}
+                <div className="container mx-auto px-4">
+                    <div className="text-center mb-12">
+                        <h2 className="text-3xl font-bold text-gray-900 mb-4">
+                            Why Choose Our School
+                        </h2>
+                        <p className="text-xl text-gray-600">
+                            We offer the best educational experience for your child
+                        </p>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="text-center p-6">
+                            <Users className="w-12 h-12 text-blue-600 mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold mb-3">Qualified Teachers</h3>
+                            <p className="text-gray-600">
+                                Our teachers are highly qualified and experienced professionals dedicated to student success.
+                            </p>
+                        </div>
+
+                        <div className="text-center p-6">
+                            <BookOpen className="w-12 h-12 text-green-600 mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold mb-3">Modern Curriculum</h3>
+                            <p className="text-gray-600">
+                                We offer a comprehensive curriculum that prepares students for future challenges and opportunities.
+                            </p>
+                        </div>
+
+                        <div className="text-center p-6">
+                            <Award className="w-12 h-12 text-purple-600 mx-auto mb-4" />
+                            <h3 className="text-xl font-semibold mb-3">Proven Excellence</h3>
+                            <p className="text-gray-600">
+                                Our students consistently achieve outstanding results in academics and extracurricular activities.
+                            </p>
+                        </div>
+                    </div>
+                </div>
             </section>
 
             {/* CTA Section */}
             <section className="py-16 bg-blue-600 text-white">
-                {/* ... existing CTA code ... */}
+                <div className="container mx-auto px-4 text-center">
+                    <h2 className="text-3xl font-bold mb-4">
+                        Ready to Join Our Community?
+                    </h2>
+                    <p className="text-xl mb-8 max-w-2xl mx-auto">
+                        Contact us today to learn more about admissions and schedule a campus tour.
+                    </p>
+                    <Button size="lg" variant="secondary" asChild>
+                        <Link to="/contact">
+                            Get in Touch
+                            <ArrowRight className="w-4 h-4 ml-2" />
+                        </Link>
+                    </Button>
+                </div>
             </section>
         </div>
     );
@@ -439,104 +523,3 @@ export default function PublicHome() {
 //     </div>
 //   );
 // }
-
-
-
-    //   {/* Statistics Section */}
-    //   <section className="py-16 bg-gray-50">
-    //     <div className="container mx-auto px-4">
-    //       <div className="text-center mb-12">
-    //         <h2 className="text-3xl font-bold text-gray-900 mb-4">
-    //           Our School at a Glance
-    //         </h2>
-    //         <p className="text-xl text-gray-600">
-    //           Proudly serving our community with excellence
-    //         </p>
-    //       </div>
-
-    //       <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
-    //         <div className="text-center">
-    //           <div className="text-4xl font-bold text-blue-600 mb-2">
-    //             {statistics.totalStudents || "1,250"}
-    //           </div>
-    //           <div className="text-gray-600">Students</div>
-    //         </div>
-    //         <div className="text-center">
-    //           <div className="text-4xl font-bold text-green-600 mb-2">
-    //             {statistics.totalTeachers || "85"}
-    //           </div>
-    //           <div className="text-gray-600">Teachers</div>
-    //         </div>
-    //         <div className="text-center">
-    //           <div className="text-4xl font-bold text-purple-600 mb-2">
-    //             {statistics.totalClasses || "45"}
-    //           </div>
-    //           <div className="text-gray-600">Classes</div>
-    //         </div>
-    //         <div className="text-center">
-    //           <div className="text-4xl font-bold text-orange-600 mb-2">
-    //             {settings.SCHOOL_ESTABLISHED || "2000"}
-    //           </div>
-    //           <div className="text-gray-600">Established</div>
-    //         </div>
-    //       </div>
-    //     </div>
-    //   </section>
-
-    //   {/* Features Section */}
-    //   <section className="py-16">
-    //     <div className="container mx-auto px-4">
-    //       <div className="text-center mb-12">
-    //         <h2 className="text-3xl font-bold text-gray-900 mb-4">
-    //           Why Choose Our School
-    //         </h2>
-    //         <p className="text-xl text-gray-600">
-    //           We offer the best educational experience for your child
-    //         </p>
-    //       </div>
-
-    //       <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-    //         <div className="text-center p-6">
-    //           <Users className="w-12 h-12 text-blue-600 mx-auto mb-4" />
-    //           <h3 className="text-xl font-semibold mb-3">Qualified Teachers</h3>
-    //           <p className="text-gray-600">
-    //             Our teachers are highly qualified and experienced professionals dedicated to student success.
-    //           </p>
-    //         </div>
-
-    //         <div className="text-center p-6">
-    //           <BookOpen className="w-12 h-12 text-green-600 mx-auto mb-4" />
-    //           <h3 className="text-xl font-semibold mb-3">Modern Curriculum</h3>
-    //           <p className="text-gray-600">
-    //             We offer a comprehensive curriculum that prepares students for future challenges and opportunities.
-    //           </p>
-    //         </div>
-
-    //         <div className="text-center p-6">
-    //           <Award className="w-12 h-12 text-purple-600 mx-auto mb-4" />
-    //           <h3 className="text-xl font-semibold mb-3">Proven Excellence</h3>
-    //           <p className="text-gray-600">
-    //             Our students consistently achieve outstanding results in academics and extracurricular activities.
-    //           </p>
-    //         </div>
-    //       </div>
-    //     </div>
-    //   </section>
-
-    //   {/* CTA Section */}
-    //   <section className="py-16 bg-blue-600 text-white">
-    //     <div className="container mx-auto px-4 text-center">
-    //       <h2 className="text-3xl font-bold mb-4">
-    //         Ready to Join Our Community?
-    //       </h2>
-    //       <p className="text-xl mb-8 max-w-2xl mx-auto">
-    //         Contact us today to learn more about admissions and schedule a campus tour.
-    //       </p>
-    //       <Button size="lg" variant="secondary" asChild>
-    //         <Link to="/contact">
-    //           Get in Touch
-    //           <ArrowRight className="w-4 h-4 ml-2" />
-    //         </Link>
-    //       </Button>
-    //     </div>
-    //   </section>

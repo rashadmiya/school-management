@@ -55,6 +55,7 @@ const NAV_ITEMS = [
     {
         label: "Clubs",
         icon: Club,
+        path: "/clubs"
         // children: [
         //     { label: "All Clubs", path: "/clubs", icon: Club },
         //     { label: "Cultural Clubs", path: "/clubs?type=cultural", icon: Sparkles },
