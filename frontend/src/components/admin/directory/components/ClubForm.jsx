@@ -16,6 +16,16 @@ import { useEffect, useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { toast } from "sonner";
 
+const clubTypes = [
+    { value: "cultural", label: "Cultural" },
+    { value: "science", label: "Science" },
+    { value: "language", label: "Language" },
+    { value: "debate", label: "Debate" },
+    { value: "sports", label: "Sports" },
+    { value: "arts", label: "Arts" },
+    { value: "technology", label: "Technology" },
+    { value: "others", label: "Others" },
+];
 // Theme hook
 const useTheme = () => {
     const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
@@ -80,6 +90,7 @@ export default function ClubForm({ open, onOpenChange, initialData, teachers = [
     } = useForm({
         defaultValues: {
             clubName: "",
+            type: "",
             supervisor: "",
             session: "",
             description: "",
@@ -117,6 +128,7 @@ export default function ClubForm({ open, onOpenChange, initialData, teachers = [
             if (initialData) {
                 const editData = {
                     clubName: initialData.clubName || "",
+                    type: initialData.type || "",
                     supervisor: initialData.supervisor?._id || "",
                     session: initialData.session || `${currentYear}-${currentYear + 1}`,
                     description: initialData.description || "",
@@ -132,6 +144,7 @@ export default function ClubForm({ open, onOpenChange, initialData, teachers = [
             } else {
                 reset({
                     clubName: "",
+                    type:"",
                     supervisor: "",
                     session: `${currentYear}-${currentYear + 1}`,
                     description: "",
@@ -254,6 +267,39 @@ export default function ClubForm({ open, onOpenChange, initialData, teachers = [
                                     <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
                                         <AlertCircle className="w-3 h-3" />
                                         {errors.clubName.message}
+                                    </p>
+                                )}
+                            </div>
+
+                            <div className="space-y-2">
+                                <Label className={theme.textSecondary}>Club Type *</Label>
+                                <Controller
+                                    name="type"
+                                    control={control}
+                                    rules={{ required: "Club type is required" }}
+                                    render={({ field }) => (
+                                        <Select
+                                            value={field.value}
+                                            onValueChange={field.onChange}
+                                            disabled={isLoading}
+                                        >
+                                            <SelectTrigger className={`${theme.select.trigger} ${errors.type ? "border-red-500" : ""}`}>
+                                                <SelectValue placeholder="Select club type" />
+                                            </SelectTrigger>
+                                            <SelectContent className={theme.select.content}>
+                                                {clubTypes.map((type) => (
+                                                    <SelectItem key={type.value} value={type.value} className={theme.select.item}>
+                                                        {type.label}
+                                                    </SelectItem>
+                                                ))}
+                                            </SelectContent>
+                                        </Select>
+                                    )}
+                                />
+                                {errors.type && (
+                                    <p className="text-xs text-red-500 mt-1 flex items-center gap-1">
+                                        <AlertCircle className="w-3 h-3" />
+                                        {errors.type.message}
                                     </p>
                                 )}
                             </div>
@@ -495,16 +541,16 @@ export default function ClubForm({ open, onOpenChange, initialData, teachers = [
                                                 </div>
                                             </div>
                                             <div className="flex items-center gap-3">
-                                                <Badge 
+                                                <Badge
                                                     variant={
                                                         member.role === 'president' ? 'default' :
-                                                        member.role === 'vice_president' ? 'secondary' :
-                                                        'outline'
+                                                            member.role === 'vice_president' ? 'secondary' :
+                                                                'outline'
                                                     }
                                                     className={
                                                         member.role === 'president' ? "bg-blue-600 text-white" :
-                                                        member.role === 'vice_president' ? "bg-gray-500 text-white" :
-                                                        theme.border
+                                                            member.role === 'vice_president' ? "bg-gray-500 text-white" :
+                                                                theme.border
                                                     }
                                                 >
                                                     {roleOptions.find(r => r.value === member.role)?.label}

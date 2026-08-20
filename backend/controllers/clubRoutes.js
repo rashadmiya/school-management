@@ -8,7 +8,6 @@ const { isAuthenticated, authorizeRoles } = require("../middleware/auth");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 
-// 🎯 Create new club
 router.post("/",
   isAuthenticated,
   authorizeRoles("admin", "teacher"),
@@ -16,6 +15,7 @@ router.post("/",
     try {
       const {
         clubName,
+        type,
         supervisor,
         session,
         description,
@@ -24,9 +24,17 @@ router.post("/",
         isActive = true
       } = req.body;
 
-      if (!clubName || !supervisor || !session) {
-        return next(new ErrorHandler("Club name, supervisor, and session are required", 400));
+      // Validate required fields including type
+      if (!clubName || !type || !supervisor || !session) {
+        return next(new ErrorHandler("Club name, club type, supervisor, and session are required", 400));
       }
+
+      // Validate club type
+      const validTypes = ['cultural', 'science', 'language', 'debate', 'sports', 'arts', 'technology', 'others'];
+      if (!validTypes.includes(type)) {
+        return next(new ErrorHandler(`Invalid club type. Must be one of: ${validTypes.join(', ')}`, 400));
+      }
+
       // Check if club name already exists for this session
       const existingClub = await Club.findOne({
         clubName: { $regex: new RegExp(`^${clubName}$`, 'i') },
@@ -54,6 +62,7 @@ router.post("/",
 
       const club = await Club.create({
         clubName,
+        type,
         supervisor,
         session,
         description,
@@ -87,7 +96,7 @@ router.post("/",
   })
 );
 
-// 🎯 Get all clubs
+// 🎯 Get all clubs (UPDATED with type filter)
 router.get("/",
   isAuthenticated,
   catchAsyncErrors(async (req, res, next) => {
@@ -96,6 +105,7 @@ router.get("/",
         search = "",
         session = "",
         supervisor = "",
+        type = "",
         isActive,
         page = 1,
         limit = 20
@@ -114,6 +124,7 @@ router.get("/",
 
       if (session) filter.session = session;
       if (supervisor) filter.supervisor = supervisor;
+      if (type) filter.type = type;
       if (isActive !== undefined) filter.isActive = isActive === 'true';
 
       const [clubs, total] = await Promise.all([
@@ -146,38 +157,7 @@ router.get("/",
   })
 );
 
-// 🎯 Get club by ID
-// router.get("/:id",
-//   isAuthenticated,
-//   catchAsyncErrors(async (req, res, next) => {
-//     try {
-//       const club = await Club.findById(req.params.id)
-//         .populate("supervisor", "user designation")
-//         .populate({
-//           path: "supervisor",
-//           populate: { path: "user", select: "name email phoneNumber" }
-//         })
-//         .populate("members.student", "name rollNumber class")
-//         .populate({
-//           path: "members.student",
-//           populate: { path: "class", select: "name" }
-//         });
-
-//       if (!club) {
-//         return next(new ErrorHandler("Club not found", 404));
-//       }
-
-//       res.status(200).json({
-//         success: true,
-//         club
-//       });
-
-//     } catch (error) {
-//       next(error);
-//     }
-//   })
-// );
-
+// 🎯 Get club by ID (UPDATED with type in response)
 router.get("/:id",
   catchAsyncErrors(async (req, res, next) => {
     try {
@@ -204,7 +184,6 @@ router.get("/:id",
   })
 );
 
-// 🎯 Update club
 router.put("/:id",
   isAuthenticated,
   authorizeRoles("admin", "teacher"),
@@ -214,6 +193,14 @@ router.put("/:id",
 
       if (!club) {
         return next(new ErrorHandler("Club not found", 404));
+      }
+
+      // Validate type if being updated
+      if (req.body.type) {
+        const validTypes = ['cultural', 'science', 'language', 'debate', 'sports', 'arts', 'technology', 'others'];
+        if (!validTypes.includes(req.body.type)) {
+          return next(new ErrorHandler(`Invalid club type. Must be one of: ${validTypes.join(', ')}`, 400));
+        }
       }
 
       // Check if club name is being changed
@@ -375,14 +362,15 @@ router.delete("/:id/members/:memberId",
   })
 );
 
-// 🎯 Public route: Get active clubs
+// 🎯 Public route: Get active clubs (UPDATED with type filter)
 router.get("/public/active",
   catchAsyncErrors(async (req, res, next) => {
     try {
-      const { session = "" } = req.query;
+      const { session = "", type = "" } = req.query;
 
       let filter = { isActive: true };
       if (session) filter.session = session;
+      if (type) filter.type = type;
 
       const clubs = await Club.find(filter)
         .populate("supervisor", "user")
@@ -391,7 +379,7 @@ router.get("/public/active",
           populate: { path: "user", select: "name" }
         })
         .populate("members.student", "name rollNumber")
-        .select("clubName supervisor session description meetingSchedule members")
+        .select("clubName type supervisor session description meetingSchedule members")
         .sort({ clubName: 1 });
 
       res.status(200).json({
@@ -406,7 +394,7 @@ router.get("/public/active",
   })
 );
 
-// 🎯 Public route: Get club by ID
+
 router.get("/public/:id",
   catchAsyncErrors(async (req, res, next) => {
     try {
@@ -417,7 +405,7 @@ router.get("/public/:id",
           populate: { path: "user", select: "name email" }
         })
         .populate("members.student", "name rollNumber class")
-        .select("clubName supervisor session description meetingSchedule members");
+        .select("clubName type supervisor session description meetingSchedule members");
 
       if (!club || !club.isActive) {
         return next(new ErrorHandler("Club not found", 404));
@@ -433,5 +421,6 @@ router.get("/public/:id",
     }
   })
 );
+
 
 module.exports = router;

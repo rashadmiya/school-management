@@ -4,7 +4,7 @@ import PublicFooter from "./PublicFooter";
 
 const PublicLayout = () => {
   return (
-    <div className="public-layout">
+    <div className="">
       <PublicHeader />
       <main>
         <Outlet />

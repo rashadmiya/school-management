@@ -7,10 +7,14 @@ const storage = multer.diskStorage({
   destination(req, file, cb) {
     let uploadPath = "uploads/others";
 
+    console.log("upload photo filename:", file.fieldname)
     // For gallery images
     if (file.fieldname === "image" || file.fieldname === "gallery") {
       uploadPath = "uploads/gallery";
+    } else if (file.fieldname === "hero" || file.fieldname === "heroSlider") {
+      uploadPath = "uploads/hero";
     }
+
     // For profile photos
     else if (file.fieldname === "photo" || file.fieldname === "avatar") {
       if (req.baseUrl && req.baseUrl.includes("students")) {
@@ -30,15 +34,15 @@ const storage = multer.diskStorage({
     // __dirname is the config folder, so we join with uploadPath
     // This creates the full path relative to the config folder
     const fullPath = path.join(__dirname, uploadPath);
-    
+
     console.log("Creating directory at:", fullPath);
-    
+
     // Create directory if it doesn't exist
     if (!fs.existsSync(fullPath)) {
       fs.mkdirSync(fullPath, { recursive: true });
       console.log("Directory created:", fullPath);
     }
-    
+
     cb(null, fullPath);
   },
 
@@ -96,7 +100,7 @@ const uploadDocument = multer({
 const uploadSingleImage = upload.single("image");
 const uploadSinglePhoto = upload.single("photo");
 const uploadSingleDocument = uploadDocument.single("document");
-
+const uploadHeroImage = upload.single("hero"); // Add this
 // Multiple images upload
 const uploadMultipleImages = upload.array("images", 10);
 
@@ -107,6 +111,7 @@ module.exports = {
   uploadSinglePhoto,
   uploadSingleDocument,
   uploadMultipleImages,
+  uploadHeroImage
 };
 
 // const multer = require("multer");

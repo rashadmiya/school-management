@@ -211,6 +211,7 @@ export const directoryApi = api.injectEndpoints({
           search = "",
           session,
           supervisor,
+          type,
           isActive
         } = params;
 
@@ -220,6 +221,7 @@ export const directoryApi = api.injectEndpoints({
         if (search) queryParams.append('search', search);
         if (session) queryParams.append('session', session);
         if (supervisor) queryParams.append('supervisor', supervisor);
+        if (type) queryParams.append('type', type);
         if (isActive !== undefined) queryParams.append('isActive', isActive);
 
         return `/clubs?${queryParams.toString()}`;
@@ -282,6 +284,23 @@ export const directoryApi = api.injectEndpoints({
         { type: "Club", id },
         "Club",
       ],
+    }),
+
+    // =========== PUBLIC CLUBS ===========
+    getPublicClubs: builder.query({
+      query: (params = {}) => {
+        const { session, type } = params;
+        const queryParams = new URLSearchParams();
+        if (session) queryParams.append('session', session);
+        if (type) queryParams.append('type', type);
+        return `/clubs/public/active?${queryParams.toString()}`;
+      },
+      providesTags: ["PublicClub"],
+    }),
+
+    getPublicClubById: builder.query({
+      query: (id) => `/clubs/public/${id}`,
+      providesTags: (result, error, id) => [{ type: "PublicClub", id }],
     }),
 
     // =========== SECTIONS ===========
@@ -389,18 +408,6 @@ export const directoryApi = api.injectEndpoints({
       query: (id) => `/public/cabinet/${id}`,
     }),
 
-    getPublicClubs: builder.query({
-      query: (params = {}) => {
-        const { session } = params;
-        const queryParams = new URLSearchParams();
-        if (session) queryParams.append('session', session);
-        return `/public/clubs?${queryParams.toString()}`;
-      },
-    }),
-
-    getPublicClubById: builder.query({
-      query: (id) => `/public/clubs/${id}`,
-    }),
 
     getPublicSections: builder.query({
       query: () => "/public/sections",

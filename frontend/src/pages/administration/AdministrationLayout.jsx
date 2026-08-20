@@ -1,6 +1,6 @@
 // /src/pages/administration/AdministrationLayout.jsx
 import { useTheme } from '@/hooks/useTheme';
-import { FileText, ImageIcon, Key, Megaphone, Settings, Shield, Users } from 'lucide-react';
+import { FileText, Image, ImageIcon, Key, Megaphone, Settings, Shield, Users } from 'lucide-react';
 import { NavLink, Outlet } from 'react-router-dom';
 
 const adminLinks = [
@@ -39,6 +39,13 @@ const adminLinks = [
     path: "/admin/gallery",
     icon: <ImageIcon className='w-4 h-4' />,
     description: 'Manage school gallery images, categories, and descriptions'
+  },
+  // In Sidebar.jsx - Add to navItems
+  {
+    name: "Hero Slider",
+    path: "/admin/hero-slider",
+    icon: <Image className='w-4 h-4' />,
+    description: "Upload and manage hero section, one image will act like banner image, multiple image create a slider"
   },
   // Add more admin features here in the future
 ];

@@ -1,3 +1,6 @@
+const Teacher = require('../models/Teacher')
+const Class = require('../models/Class')
+const Subject = require('../models/Subject')
 // services/routineService.js
 const updateTeacherSubjectsAndClasses = async (teacherId, subjectId, classId) => {
   try {

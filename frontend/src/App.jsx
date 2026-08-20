@@ -102,6 +102,7 @@ import CabinetManagementPage from "./pages/public/admin/CabinetManagementPage";
 import ClubManagementPage from "./pages/public/admin/ClubManagementPage";
 import GalleryPage from "./pages/public/GalleryPage";
 import GalleryManager from "./pages/public/admin/GalleryManager";
+import HeroSliderManager from "./pages/public/admin/HeroSliderManager";
 
 function App() {
   return (
@@ -158,7 +159,7 @@ function App() {
             <Route path="pages" element={<AdminProtectedRoute children={<PageManager />} />} />
             <Route path="settings" element={<AdminProtectedRoute children={<SettingsManager />} />} />
             <Route path="announcements" element={<AdminProtectedRoute children={<AnnouncementManager />} />} />
-
+            <Route path="hero-slider" element={<AdminProtectedRoute children={<HeroSliderManager />} />} />
             {/* Finance Routes - Now inside admin layout */}
             <Route path="finance" element={<AdminProtectedRoute children={<FinanceDashboard />} />} />
             <Route path="finance/fees/templates" element={<AdminProtectedRoute children={<FeeTemplates />} />} />

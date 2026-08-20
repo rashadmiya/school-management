@@ -534,7 +534,7 @@ export default function GalleryPage() {
                                     </div>
                                     <Button
                                         variant="outline"
-                                        className="text-white border-white/30 hover:bg-white/10"
+                                        className="text-gray-800 border-gray-100 hover:bg-gray-200"
                                         onClick={() => handleDownload(selectedImage)}
                                     >
                                         <Download className="w-4 h-4 mr-2" />

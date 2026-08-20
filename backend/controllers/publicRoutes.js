@@ -5,13 +5,6 @@ const Page = require("../models/Page");
 const Setting = require("../models/Setting");
 const ErrorHandler = require("../utils/ErrorHandler");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
-
-// Import controllers
-// const Announcement = require('../models/Announcement');
-// const Student = require('../models/Student');
-// const Teacher = require('../models/Teacher');
-// const Class = require('../models/Class');
-
 // NEW: Import directory models
 const Stuff = require('../models/Stuff');
 const SchoolManagementCommittee = require('../models/SchoolManagementCommittee');

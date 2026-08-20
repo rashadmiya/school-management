@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { useLogOutMutation, useMeQuery } from "@/features/apis/authApi";
 import { useGetAllPagesQuery, useGetPublicSettingsQuery } from "@/features/apis/publicApi";
 import { userLoggedOut } from "@/features/slices/authSlice";
-import { useAppDispatch, useAppSelector } from "@/features/store";
+import { useAppDispatch } from "@/features/store";
 import { AnimatePresence, motion } from "framer-motion";
 import {
     Bell,
@@ -13,10 +13,9 @@ import {
     ChevronRight,
     Club,
     FlaskConical,
-    GalleryHorizontal,
-    Grid,
     GitBranch,
-    GraduationCap, // Gallery
+    GraduationCap,
+    Grid, // Gallery
     Info,
     LayoutDashboard,
     ListChecks,
@@ -27,63 +26,15 @@ import {
     UserRound,
     Users,
     UsersRound,
-    X,
-    Sun,
-    Moon
+    X
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { toast } from "react-toastify";
 import schoolLogo from "../../assets/appayan-sm-2.png";
-import { setIsSidebarCollapsed, setIsDarkMode } from "@/features/globalReducer";
+import { backend_url } from "@/utils/server";
 
-// ----- Navigation structure -----
-// const NAV_ITEMS = [
-//     {
-//         label: "Administration",
-//         icon: Users, // Changed from Building
-//         children: [
-//             { label: "Governing Body", path: "/administration/governing-body", icon: UsersRound },
-//             { label: "Teachers List", path: "/administration/teachers", icon: UserRound },
-//             { label: "Staff Information", path: "/administration/staff", icon: Briefcase },
-//         ],
-//     },
-//     {
-//         label: "Classes",
-//         icon: BookOpen, // Changed from StepForward
-//         children: [
-//             { label: "Class List", path: "/classes/list", icon: ListChecks },
-//         ],
-//     },
-//     {
-//         label: "Clubs",
-//         icon: Club, // Keep this - appropriate
-//         children: [
-//             { label: "Cultural Clubs", path: "/clubs/cultural", icon: Sparkles },
-//             { label: "Science Club", path: "/clubs/science", icon: FlaskConical },
-//             { label: "Language Club", path: "/clubs/language", icon: Mic },
-//             { label: "Debate Club", path: "/clubs/debate", icon: GitBranch },
-//         ],
-//     },
-//     {
-//         label: "Notices",
-//         path: "/announcements",
-//         icon: Bell, // Keep - perfect
-//     },
-//     {
-//         label: "Gallery",
-//         path: "/gallery",
-//         icon: Grid, // Keep - perfect
-//     },
-//     {
-//         label: "About Us",
-//         path: "/about",
-//         icon: Info, // Changed from PenBox
-//     },
-// ];
-// In PublicHeader.jsx
-// In PublicHeader.jsx
-// In PublicHeader.jsx
+
 const NAV_ITEMS = [
     {
         label: "Administration",
@@ -104,13 +55,13 @@ const NAV_ITEMS = [
     {
         label: "Clubs",
         icon: Club,
-        children: [
-            { label: "All Clubs", path: "/clubs", icon: Club },
-            { label: "Cultural Clubs", path: "/clubs?type=cultural", icon: Sparkles },
-            { label: "Science Club", path: "/clubs?type=science", icon: FlaskConical },
-            { label: "Language Club", path: "/clubs?type=language", icon: Mic },
-            { label: "Debate Club", path: "/clubs?type=debate", icon: GitBranch },
-        ],
+        // children: [
+        //     { label: "All Clubs", path: "/clubs", icon: Club },
+        //     { label: "Cultural Clubs", path: "/clubs?type=cultural", icon: Sparkles },
+        //     { label: "Science Club", path: "/clubs?type=science", icon: FlaskConical },
+        //     { label: "Language Club", path: "/clubs?type=language", icon: Mic },
+        //     { label: "Debate Club", path: "/clubs?type=debate", icon: GitBranch },
+        // ],
     },
     {
         label: "Notices",
@@ -130,8 +81,6 @@ const NAV_ITEMS = [
 ];
 
 const PublicHeader = () => {
-    const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
-
     const navigate = useNavigate();
     const location = useLocation();
     const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -147,15 +96,6 @@ const PublicHeader = () => {
 
     const settings = settingsData?.settings || {};
     const pages = pagesData?.pages || [];
-
-    // Merge dynamic pages
-    const dynamicPages = pages.map((page) => ({
-        label: page.title,
-        path: `/${page.slug === "home" ? "" : page.slug}`,
-        icon: GraduationCap,
-    }));
-
-    //   const allNavItems = [...NAV_ITEMS, ...dynamicPages];
 
     const [logOutApiCall, { isLoading: isLoggingOut }] = useLogOutMutation();
     const dispatch = useAppDispatch();
@@ -246,19 +186,9 @@ const PublicHeader = () => {
         setOpenMobileSub(openMobileSub === index ? null : index);
     };
 
-const toggleDarkMode = () => {
-    if (isDarkMode) {
-        console.log("applying light mode")
-        dispatch(setIsDarkMode(false))  // ✅ Use dispatch with the action creator
-    } else {
-        console.log("applying dark mode")
-        dispatch(setIsDarkMode(true))   // ✅ Use dispatch with the action creator
-    }
-}
-
     return (
-        <header className="bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
-            <div className="container mx-auto px-4">
+        <header className="w-full px-10 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
+            <div className="w-full">
                 <div className="flex justify-between items-center h-16">
                     {/* Logo and School Name */}
                     <Link
@@ -266,7 +196,7 @@ const toggleDarkMode = () => {
                         className="flex items-center space-x-3 flex-shrink-0"
                     >
                         <img
-                            src={settings.SCHOOL_LOGO || schoolLogo}
+                            src={`${backend_url}$settings.SCHOOL_LOGO` || schoolLogo}
                             alt="School Logo"
                             className="h-10 w-10 object-contain rounded-full border border-gray-200"
                         />
@@ -292,7 +222,7 @@ const toggleDarkMode = () => {
                                         onMouseLeave={handleMouseLeave}
                                     >
                                         <button
-                                            className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${isItemActive || isParentActive(item)
+                                            className={`px-1 py-1.5 rounded-md text-sm font-medium transition-all duration-200 flex items-center space-x-1.5 ${isItemActive || isParentActive(item)
                                                 ? "text-blue-600 bg-blue-50"
                                                 : "text-gray-600 hover:text-blue-600 hover:bg-blue-50"
                                                 }`}
@@ -348,11 +278,6 @@ const toggleDarkMode = () => {
                             }
                         })}
 
-                        {/* <div className="cursor-pointer" onClick={toggleDarkMode}>
-                            {isDarkMode ?
-                                <Sun className="w-5 h-5" /> :
-                                <Moon className="w-5 h-5" />}
-                        </div> */}
                         {/* User Section */}
                         <div className="ml-3 pl-3 border-l border-gray-200">
                             {isAuthLoading ? (
