@@ -1,11 +1,10 @@
 // components/parent/ParentPayments.jsx
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { DollarSign, Download, FileText, User, Calendar } from "lucide-react";
 import { useGetParentChildrenPaymentsQuery } from "@/features/apis/parentsApi";
+import { Download, FileText, User } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function ParentPayments() {

@@ -168,9 +168,9 @@ export default function PageForm({
 
                 <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
                     <Tabs value={activeTab} onValueChange={setActiveTab}>
-                        <TabsList className="grid w-full grid-cols-3">
+                        <TabsList className="grid w-full grid-cols-2">
                             <TabsTrigger value="content">Content</TabsTrigger>
-                            <TabsTrigger value="seo">SEO</TabsTrigger>
+                            {/* <TabsTrigger value="seo">SEO</TabsTrigger> */}
                             <TabsTrigger value="sections">Sections</TabsTrigger>
                         </TabsList>
 

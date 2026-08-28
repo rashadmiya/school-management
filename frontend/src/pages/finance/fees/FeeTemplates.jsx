@@ -111,6 +111,7 @@ const FeeTemplates = () => {
                 {selectedTemplate ? 'Edit Fee Template' : 'Create New Fee Template'}
               </DialogTitle>
             </DialogHeader>
+            
             <FeeTemplateForm
               template={selectedTemplate}
               classes={classesData?.classes || []}

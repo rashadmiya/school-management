@@ -3,10 +3,10 @@ import { Globe, Phone, Share, Search } from "lucide-react";
 
 export const SETTING_CATEGORIES = [
     { id: 'general', name: 'General', icon: Globe, description: 'Basic school information' },
-    { id: 'contact', name: 'Contact', icon: Phone, description: 'Contact information' },
+    // { id: 'contact', name: 'Contact', icon: Phone, description: 'Contact information' },
     { id: 'social', name: 'Social Media', icon: Share, description: 'Social media links' },
-    { id: 'appearance', name: 'Appearance', icon: Globe, description: 'Website appearance' },
-    { id: 'seo', name: 'SEO', icon: Search, description: 'Search engine optimization' },
+    // { id: 'appearance', name: 'Appearance', icon: Globe, description: 'Website appearance' },
+    // { id: 'seo', name: 'SEO', icon: Search, description: 'Search engine optimization' },
     { id: 'academic', name: 'Academic', icon: Globe, description: 'Academic settings' },
 ];
 

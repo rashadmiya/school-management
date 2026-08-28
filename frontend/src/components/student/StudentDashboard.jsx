@@ -1,10 +1,9 @@
 // components/student/StudentDashboard.jsx
-import React from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { BookOpen, Calendar, Clock, TrendingUp, Users, FileText, AlertCircle, User, DollarSign } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetStudentDashboardQuery } from "@/features/apis/studentsApi";
+import { AlertCircle, BookOpen, Calendar, Clock, FileText, TrendingUp, User } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function StudentDashboard() {
@@ -72,7 +71,7 @@ export default function StudentDashboard() {
             {paymentSummary.totalOutstanding > 0 && (
                 <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
                     <div className="flex items-center gap-2">
-                        <DollarSign className="w-5 h-5 text-yellow-600" />
+                        <span className="text-yellow-500 h-5 w-5 text-muted-foreground text-lg">৳</span>
                         <span className="font-medium text-yellow-800">
                             You have outstanding fees: ${paymentSummary.totalOutstanding}
                         </span>
@@ -156,7 +155,7 @@ export default function StudentDashboard() {
                     <CardContent className="p-6">
                         <div className="flex items-center gap-4">
                             <div className="p-3 bg-indigo-100 rounded-lg">
-                                <DollarSign className="w-6 h-6 text-indigo-600" />
+                                <span className="text-indigo-600 w-6 h-6 text-muted-foreground text-lg">৳</span>
                             </div>
                             <div>
                                 <p className="text-2xl font-bold">{paymentSummary.collectionRate || 0}%</p>
@@ -172,7 +171,7 @@ export default function StudentDashboard() {
                 <Card>
                     <CardHeader className="flex flex-row items-center justify-between">
                         <CardTitle className="flex items-center gap-2">
-                            <DollarSign className="w-5 h-5" />
+                            <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
                             Payment Summary
                         </CardTitle>
                         <Badge variant="outline">
@@ -417,7 +416,7 @@ export default function StudentDashboard() {
 
                         <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4" asChild>
                             <Link to="/student/payments">
-                                <DollarSign className="w-6 h-6" />
+                                <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
                                 <span>Payments</span>
                             </Link>
                         </Button>

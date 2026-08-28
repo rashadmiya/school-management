@@ -1,38 +1,37 @@
 // src/pages/Payments/AdvanceBalance.jsx - SIMPLE WORKING VERSION
-import { useState, useEffect } from 'react'
+import { Alert, AlertDescription } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Alert, AlertDescription } from '@/components/ui/alert'
 import {
-  useGetStudentFeesQuery,
-  useGetCurrentSessionQuery
+  useGetCurrentSessionQuery,
+  useGetStudentFeesQuery
 } from '@/features/apis/finance/feeApi'
 import {
   useAutoApplyAdvanceMutation,
   useGetAdvanceBalanceQuery,
   useUseAdvanceBalanceMutation
 } from '@/features/apis/finance/paymentApi'
-import { useLazySearchStudentsLazyQuery } from '@/features/apis/studentsApi' // Changed this
+import { useLazySearchStudentsLazyQuery } from '@/features/apis/studentsApi'; // Changed this
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, formatDate } from '@/lib/formaters'
 import {
+  AlertCircle,
   ArrowRightLeft,
-  DollarSign,
+  CheckCircle,
   Download,
   History,
+  Info,
+  Loader2,
   Search,
   TrendingDown,
   TrendingUp,
-  User,
-  AlertCircle,
-  Loader2,
-  CheckCircle,
-  Info
+  User
 } from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 const AdvanceBalance = () => {
   const [searchTerm, setSearchTerm] = useState('')
@@ -354,8 +353,8 @@ const AdvanceBalance = () => {
                     <CardTitle className="text-sm font-medium">Advance Balance</CardTitle>
                     <div className={`h-10 w-10 rounded-full flex items-center justify-center ${advanceBalance.amount > 0 ? 'bg-green-100' : 'bg-gray-100'
                       }`}>
-                      <DollarSign className={`h-5 w-5 ${advanceBalance.amount > 0 ? 'text-green-600' : 'text-gray-400'
-                        }`} />
+
+                        <span className={`${advanceBalance.amount>0 ? 'text-green-600':'text-gray-400'} text-muted-foreground text-lg`}>৳</span>
                     </div>
                   </CardHeader>
                   <CardContent>
@@ -733,437 +732,3 @@ const AdvanceBalance = () => {
 }
 
 export default AdvanceBalance
-
-// // src/pages/Payments/AdvanceBalance.jsx
-// import { Badge } from '@/components/ui/badge'
-// import { Button } from '@/components/ui/button'
-// import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-// import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-// import { Input } from '@/components/ui/input'
-// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-// import { useGetStudentFeesQuery } from '@/features/apis/finance/feeApi'
-// import { useAutoApplyAdvanceMutation, useGetAdvanceBalanceQuery, useUseAdvanceBalanceMutation } from '@/features/apis/finance/paymentApi'
-// import { useGetStudentsByIdQuery, useAdvancedStudentSearchQuery } from '@/features/apis/studentsApi'
-// import { useToast } from '@/hooks/use-toast'
-// import { formatCurrency, formatDate } from '@/lib/formaters'
-// import {
-//   ArrowRightLeft,
-//   DollarSign,
-//   Download,
-//   History,
-//   Search,
-//   TrendingDown,
-//   TrendingUp,
-//   User
-// } from 'lucide-react'
-// import { useState } from 'react'
-
-// const AdvanceBalance = () => {
-//   const [searchTerm, setSearchTerm] = useState('')
-//   const [selectedStudent, setSelectedStudent] = useState(null)
-//   const [showTransactions, setShowTransactions] = useState(false)
-//   const [showUseAdvance, setShowUseAdvance] = useState(false)
-//   const [useAmount, setUseAmount] = useState('')
-
-//   const { toast } = useToast()
-
-//   const { data: searchResults } = useAdvancedStudentSearchQuery(searchTerm, {
-//     skip: searchTerm.length < 2,
-//   })
-
-//   const { data: student } = useGetStudentsByIdQuery(selectedStudent?._id, {
-//     skip: !selectedStudent,
-//   })
-
-//   const { data: advanceBalance, refetch: refetchAdvance } = useGetAdvanceBalanceQuery(
-//     selectedStudent?._id,
-//     { skip: !selectedStudent }
-//   )
-
-//   const { data: studentFees } = useGetStudentFeesQuery(
-//     selectedStudent ? { studentId: selectedStudent._id } : null,
-//     { skip: !selectedStudent }
-//   )
-
-//   console.log('advanceBalance', advanceBalance);
-//   console.log('studentFees', studentFees);
-//   console.log('search reasult', searchResults);
-//   const [autoApplyAdvance, { isLoading: isAutoApplying }] = useAutoApplyAdvanceMutation()
-
-//   // Inside component:
-//   const [useAdvanceBalance, { isLoading: isUsingAdvance }] = useUseAdvanceBalanceMutation();
-
-//   const handleStudentSelect = (student) => {
-//     setSelectedStudent(student)
-//   }
-
-//   const handleAutoApply = async () => {
-//     if (!selectedStudent) return
-
-//     try {
-//       const result = await autoApplyAdvance({
-//         studentId: selectedStudent._id,
-//       }).unwrap()
-
-//       toast({
-//         title: 'Success',
-//         description: `Advance balance applied to ${result.appliedFees.length} fees`,
-//         variant: 'success',
-//       })
-
-//       refetchAdvance()
-//     } catch (error) {
-//       toast({
-//         title: 'Error',
-//         description: error.data?.message || 'Failed to apply advance balance',
-//         variant: 'destructive',
-//       })
-//     }
-//   }
-
-//   const totalDueAmount = studentFees?.reduce((sum, fee) => sum + fee.dueAmount, 0) || 0
-//   const canAutoApply = advanceBalance?.amount > 0 && totalDueAmount > 0
-
-//   return (
-//     <div className="space-y-6">
-//       {/* Header */}
-//       <div className="flex items-center justify-between">
-//         <div>
-//           <h1 className="text-3xl font-bold tracking-tight">Advance Balance</h1>
-//           <p className="text-muted-foreground">
-//             Manage student advance/credit balances
-//           </p>
-//         </div>
-//         <div className="flex items-center space-x-2">
-//           <Button variant="outline">
-//             <Download className="mr-2 h-4 w-4" />
-//             Export Report
-//           </Button>
-//         </div>
-//       </div>
-
-//       {/* Student Search */}
-//       <Card>
-//         <CardHeader>
-//           <CardTitle>Search Student</CardTitle>
-//         </CardHeader>
-//         <CardContent>
-//           <div className="space-y-4">
-//             <div className="relative">
-//               <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-//               <Input
-//                 placeholder="Search by name or roll number..."
-//                 className="pl-10"
-//                 value={searchTerm}
-//                 onChange={(e) => setSearchTerm(e.target.value)}
-//                 onFocus={() => {
-//                   if (searchTerm.length >= 2 && searchResults) {
-//                     // Show search results
-//                   }
-//                 }}
-//               />
-//             </div>
-
-//             {searchResults && searchResults.length > 0 && searchTerm.length >= 2 && (
-//               <div className="border rounded-md max-h-60 overflow-auto">
-//                 {searchResults.map((student) => (
-//                   <div
-//                     key={student._id}
-//                     className="px-4 py-3 hover:bg-gray-50 cursor-pointer border-b last:border-b-0"
-//                     onClick={() => handleStudentSelect(student)}
-//                   >
-//                     <div className="font-medium">{student.name}</div>
-//                     <div className="text-sm text-gray-500">
-//                       Roll: {student.rollNumber} | Class: {student.class?.name}
-//                     </div>
-//                   </div>
-//                 ))}
-//               </div>
-//             )}
-//           </div>
-//         </CardContent>
-//       </Card>
-
-//       {/* Selected Student Info */}
-//       {selectedStudent && (
-//         <>
-//           <Card>
-//             <CardContent className="pt-6">
-//               <div className="flex items-center justify-between">
-//                 <div className="flex items-center space-x-4">
-//                   <div className="h-12 w-12 rounded-full bg-primary/10 flex items-center justify-center">
-//                     <User className="h-6 w-6 text-primary" />
-//                   </div>
-//                   <div>
-//                     <h3 className="text-lg font-semibold">{selectedStudent.name}</h3>
-//                     <p className="text-gray-500">
-//                       Roll: {selectedStudent.rollNumber} | Class: {selectedStudent.class?.name} | Session: {selectedStudent.session}
-//                     </p>
-//                   </div>
-//                 </div>
-//                 <div className="flex items-center space-x-3">
-//                   <Button
-//                     variant="outline"
-//                     onClick={() => setShowTransactions(true)}
-//                   >
-//                     <History className="mr-2 h-4 w-4" />
-//                     View Transactions
-//                   </Button>
-//                   {canAutoApply && (
-//                     <Button
-//                       variant="outline"
-//                       onClick={handleAutoApply}
-//                       disabled={isAutoApplying}
-//                     >
-//                       {isAutoApplying ? (
-//                         <>
-//                           <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary mr-2"></div>
-//                           Applying...
-//                         </>
-//                       ) : (
-//                         <>
-//                           <ArrowRightLeft className="mr-2 h-4 w-4" />
-//                           Auto Apply
-//                         </>
-//                       )}
-//                     </Button>
-//                   )}
-//                 </div>
-//               </div>
-//             </CardContent>
-//           </Card>
-
-//           {/* Advance Balance Overview */}
-//           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-//             <Card>
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium">Advance Balance</CardTitle>
-//                 <DollarSign className="h-4 w-4 text-green-600" />
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-green-600">
-//                   {formatCurrency(advanceBalance?.amount || 0)}
-//                 </div>
-//                 <p className="text-xs text-gray-500">
-//                   Available for fee payments
-//                 </p>
-//               </CardContent>
-//             </Card>
-
-//             <Card>
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium">Total Due</CardTitle>
-//                 <TrendingDown className="h-4 w-4 text-red-600" />
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-red-600">
-//                   {formatCurrency(totalDueAmount)}
-//                 </div>
-//                 <p className="text-xs text-gray-500">
-//                   Across {studentFees?.length || 0} fee(s)
-//                 </p>
-//               </CardContent>
-//             </Card>
-
-//             <Card>
-//               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-//                 <CardTitle className="text-sm font-medium">Can Cover</CardTitle>
-//                 <TrendingUp className="h-4 w-4 text-blue-600" />
-//               </CardHeader>
-//               <CardContent>
-//                 <div className="text-3xl font-bold text-blue-600">
-//                   {formatCurrency(Math.min(advanceBalance?.amount || 0, totalDueAmount))}
-//                 </div>
-//                 <p className="text-xs text-gray-500">
-//                   {totalDueAmount > 0 ? (
-//                     <span>
-//                       {Math.round((Math.min(advanceBalance?.amount || 0, totalDueAmount) / totalDueAmount) * 100)}% of due amount
-//                     </span>
-//                   ) : (
-//                     'No due fees'
-//                   )}
-//                 </p>
-//               </CardContent>
-//             </Card>
-//           </div>
-
-//           {/* Outstanding Fees */}
-//           <Card>
-//             <CardHeader>
-//               <div className="flex items-center justify-between">
-//                 <CardTitle>Outstanding Fees</CardTitle>
-//                 <div className="text-sm text-gray-500">
-//                   {studentFees?.filter(f => f.dueAmount > 0).length || 0} fees with due amount
-//                 </div>
-//               </div>
-//             </CardHeader>
-//             <CardContent>
-//               {studentFees?.length > 0 ? (
-//                 <div className="overflow-x-auto">
-//                   <Table>
-//                     <TableHeader>
-//                       <TableRow>
-//                         <TableHead>Fee Title</TableHead>
-//                         <TableHead>Due Date</TableHead>
-//                         <TableHead>Total Amount</TableHead>
-//                         <TableHead>Paid</TableHead>
-//                         <TableHead>Due Amount</TableHead>
-//                         <TableHead>Status</TableHead>
-//                         <TableHead className="text-right">Actions</TableHead>
-//                       </TableRow>
-//                     </TableHeader>
-//                     <TableBody>
-//                       {studentFees
-//                         .filter(fee => fee.dueAmount > 0)
-//                         .map((fee) => (
-//                           <TableRow key={fee._id}>
-//                             <TableCell>
-//                               <div className="font-medium">{fee.feeTemplate?.title}</div>
-//                             </TableCell>
-//                             <TableCell>
-//                               <div className="text-sm">{formatDate(fee.dueDate)}</div>
-//                             </TableCell>
-//                             <TableCell className="font-medium">
-//                               {formatCurrency(fee.totalAmount)}
-//                             </TableCell>
-//                             <TableCell>
-//                               <div className="text-green-600">
-//                                 {formatCurrency(fee.paidAmount)}
-//                               </div>
-//                             </TableCell>
-//                             <TableCell>
-//                               <div className="font-semibold text-red-600">
-//                                 {formatCurrency(fee.dueAmount)}
-//                               </div>
-//                             </TableCell>
-//                             <TableCell>
-//                               <Badge className="bg-yellow-100 text-yellow-800">
-//                                 Due
-//                               </Badge>
-//                             </TableCell>
-//                             <TableCell className="text-right">
-//                               <div className="flex items-center justify-end space-x-2">
-//                                 <Button
-//                                   variant="outline"
-//                                   size="sm"
-//                                   onClick={() => {
-//                                     setShowUseAdvance(true)
-//                                     setUseAmount(Math.min(fee.dueAmount, advanceBalance?.amount || 0).toString())
-//                                   }}
-//                                   disabled={(advanceBalance?.amount || 0) <= 0}
-//                                 >
-//                                   Use Advance
-//                                 </Button>
-//                               </div>
-//                             </TableCell>
-//                           </TableRow>
-//                         ))}
-//                     </TableBody>
-//                   </Table>
-//                 </div>
-//               ) : (
-//                 <div className="text-center py-8">
-//                   <DollarSign className="mx-auto h-12 w-12 text-gray-400" />
-//                   <h3 className="mt-4 text-lg font-semibold">No outstanding fees</h3>
-//                   <p className="text-gray-500">All fees are paid or waived</p>
-//                 </div>
-//               )}
-//             </CardContent>
-//           </Card>
-//         </>
-//       )}
-
-//       {/* Transaction History Dialog */}
-//       <Dialog open={showTransactions} onOpenChange={setShowTransactions}>
-//         <DialogContent className="max-w-4xl">
-//           <DialogHeader>
-//             <DialogTitle>Advance Balance Transactions</DialogTitle>
-//           </DialogHeader>
-//           {advanceBalance && (
-//             <div className="space-y-4">
-//               <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-//                 <div>
-//                   <div className="text-2xl font-bold text-green-600">
-//                     {formatCurrency(advanceBalance.amount)}
-//                   </div>
-//                   <div className="text-sm text-gray-500">Current Balance</div>
-//                 </div>
-//                 <div className="text-right">
-//                   <div className="text-sm font-medium">Last Updated</div>
-//                   <div className="text-sm text-gray-500">
-//                     {formatDate(advanceBalance.lastUpdated)}
-//                   </div>
-//                 </div>
-//               </div>
-
-//               <div className="space-y-3">
-//                 <h4 className="font-medium">Transaction History</h4>
-//                 {advanceBalance.transactions?.length > 0 ? (
-//                   <div className="max-h-96 overflow-auto">
-//                     <Table>
-//                       <TableHeader>
-//                         <TableRow>
-//                           <TableHead>Date</TableHead>
-//                           <TableHead>Type</TableHead>
-//                           <TableHead>Description</TableHead>
-//                           <TableHead className="text-right">Amount</TableHead>
-//                           <TableHead className="text-right">Balance</TableHead>
-//                         </TableRow>
-//                       </TableHeader>
-//                       <TableBody>
-//                         {advanceBalance.transactions.map((transaction, index) => (
-//                           <TableRow key={index}>
-//                             <TableCell>
-//                               <div className="text-sm">
-//                                 {formatDate(transaction.createdAt)}
-//                               </div>
-//                             </TableCell>
-//                             <TableCell>
-//                               <Badge className={
-//                                 transaction.type === 'credit'
-//                                   ? 'bg-green-100 text-green-800'
-//                                   : 'bg-red-100 text-red-800'
-//                               }>
-//                                 {transaction.type}
-//                               </Badge>
-//                             </TableCell>
-//                             <TableCell>
-//                               <div className="text-sm">{transaction.description}</div>
-//                             </TableCell>
-//                             <TableCell className="text-right">
-//                               <div className={
-//                                 transaction.type === 'credit'
-//                                   ? 'text-green-600 font-medium'
-//                                   : 'text-red-600 font-medium'
-//                               }>
-//                                 {transaction.type === 'credit' ? '+' : '-'}
-//                                 {formatCurrency(transaction.amount)}
-//                               </div>
-//                             </TableCell>
-//                             <TableCell className="text-right">
-//                               <div className="font-medium">
-//                                 {formatCurrency(transaction.newBalance)}
-//                               </div>
-//                             </TableCell>
-//                           </TableRow>
-//                         ))}
-//                       </TableBody>
-//                     </Table>
-//                   </div>
-//                 ) : (
-//                   <div className="text-center py-8">
-//                     <History className="mx-auto h-12 w-12 text-gray-400" />
-//                     <h3 className="mt-4 text-lg font-semibold">No transactions</h3>
-//                     <p className="text-gray-500">No advance balance transactions found</p>
-//                   </div>
-//                 )}
-//               </div>
-//             </div>
-//           )}
-//         </DialogContent>
-//       </Dialog>
-//     </div>
-//   )
-// }
-
-// export default AdvanceBalance

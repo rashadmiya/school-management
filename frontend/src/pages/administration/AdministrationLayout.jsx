@@ -28,12 +28,12 @@ const adminLinks = [
     icon: <Key className="w-4 h-4" />,
     description: 'Configure user roles and permissions'
   },
-  // {
-  //   name: 'Public Pages',
-  //   path: '/admin/pages',
-  //   icon: <FileText className="w-4 h-4" />,
-  //   description: 'Create and updates public pages'
-  // },
+  {
+    name: 'Public Pages',
+    path: '/admin/pages',
+    icon: <FileText className="w-4 h-4" />,
+    description: 'Create and updates public pages'
+  },
   {
     name: "Gallery",
     path: "/admin/gallery",

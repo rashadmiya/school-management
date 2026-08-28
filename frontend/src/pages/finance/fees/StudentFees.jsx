@@ -7,7 +7,6 @@ import { useGetFeeSummaryQuery, useGetStudentFeesQuery } from '@/features/apis/f
 import {
   AlertCircle,
   Calendar,
-  DollarSign,
   Download,
   Eye,
   Search,
@@ -18,9 +17,9 @@ import { useState } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { useStudentSearch } from '@/hooks/useStudentSearch'
 import { formatCurrency, formatDate, getStatusColor } from '@/lib/formaters'
 import { SESSION_OPTIONS } from '@/utils/constants'
-import { useStudentSearch } from '@/hooks/useStudentSearch'
 
 const StudentFees = () => {
   const [search, setSearch] = useState('')
@@ -227,7 +226,7 @@ const StudentFees = () => {
               </div>
               <div className="flex items-center space-x-2">
                 <Button>
-                  <DollarSign className="mr-2 h-4 w-4" />
+                  <span className="mr-2 h-4 w-4 text-muted-foreground text-lg">৳</span>
                   Receive Payment
                 </Button>
                 <Button variant="outline">
@@ -329,7 +328,7 @@ const StudentFees = () => {
               </div>
             ) : (
               <div className="text-center py-8">
-                <DollarSign className="mx-auto h-12 w-12 text-gray-400" />
+                <span className="h-10 w-10 text-muted-foreground text-lg">৳</span>
                 <h3 className="mt-4 text-lg font-semibold">No fees found</h3>
                 <p className="text-gray-500">This student has no fees for the selected session</p>
               </div>

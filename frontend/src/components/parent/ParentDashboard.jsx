@@ -3,7 +3,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useGetParentDashboardQuery } from "@/features/apis/parentsApi";
-import { BookOpen, Calendar, TrendingUp, User, Users, Clock, AlertCircle, DollarSign, FileText } from "lucide-react";
+import { BookOpen, Calendar, TrendingUp, User, Users } from "lucide-react";
 import { Link } from "react-router-dom";
 
 export default function ParentDashboard() {
@@ -55,7 +55,7 @@ export default function ParentDashboard() {
       {paymentSummary?.totalOutstanding > 0 && (
         <div className="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
           <div className="flex items-center gap-2">
-            <DollarSign className="w-5 h-5 text-yellow-600" />
+            <span className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground text-lg">৳</span>
             <span className="font-medium text-yellow-800">
               Total Outstanding Fees: ${paymentSummary.totalOutstanding}
             </span>
@@ -125,7 +125,7 @@ export default function ParentDashboard() {
           <CardContent className="p-6">
             <div className="flex items-center gap-4">
               <div className="p-3 bg-indigo-100 rounded-lg">
-                <DollarSign className="w-6 h-6 text-indigo-600" />
+                <span className="h-4 w-4 text-indigo-400 text-muted-foreground text-lg">৳</span>
               </div>
               <div>
                 <p className="text-2xl font-bold">{paymentSummary?.collectionRate || 0}%</p>
@@ -141,7 +141,7 @@ export default function ParentDashboard() {
         <Card>
           <CardHeader className="flex flex-row items-center justify-between">
             <CardTitle className="flex items-center gap-2">
-              <DollarSign className="w-5 h-5" />
+              <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
               Payment Summary
             </CardTitle>
             <Badge variant={paymentSummary?.totalOutstanding > 0 ? "destructive" : "default"}>
@@ -423,7 +423,7 @@ export default function ParentDashboard() {
 
             <Button variant="outline" className="flex flex-col items-center gap-2 h-auto py-4" asChild>
               <Link to="/parent/payments">
-                <DollarSign className="w-6 h-6" />
+               <span className="w-6 h-6 text-muted-foreground text-lg">৳</span>
                 <span>Payments</span>
               </Link>
             </Button>

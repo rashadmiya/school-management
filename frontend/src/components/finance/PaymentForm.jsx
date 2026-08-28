@@ -1,47 +1,44 @@
 // src/components/payments/PaymentForm.jsx - ENHANCED VERSION
-import { useState, useEffect } from 'react'
-import { useForm } from 'react-hook-form'
-import { zodResolver } from '@hookform/resolvers/zod'
-import { paymentSchema } from '@/lib/validators'
-import { 
-  useReceivePaymentMutation,
-  useGetAdvanceBalanceQuery 
+import {
+  useGetAdvanceBalanceQuery,
+  useReceivePaymentMutation
 } from '@/features/apis/finance/paymentApi'
+import { paymentSchema } from '@/lib/validators'
+import { zodResolver } from '@hookform/resolvers/zod'
+import { useState } from 'react'
+import { useForm } from 'react-hook-form'
 
 import { useGetStudentFeesQuery } from '@/features/apis/finance/feeApi'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, formatDate } from '@/lib/formaters'
-import { 
-  BANK_OPTIONS, 
-  MOBILE_OPERATORS, 
-  PAYMENT_METHODS, 
-  SESSION_OPTIONS 
+import {
+  BANK_OPTIONS,
+  MOBILE_OPERATORS,
+  PAYMENT_METHODS,
+  SESSION_OPTIONS
 } from '@/utils/constants'
-import { 
-  Search, 
-  User, 
-  X, 
+import {
   AlertCircle,
+  Calendar,
   CheckCircle,
   ChevronDown,
   ChevronUp,
-  DollarSign,
-  Calendar,
-  FileText
+  FileText,
+  User
 } from 'lucide-react'
 
 // Components
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Textarea } from '@/components/ui/textarea'
-import { Label } from '@/components/ui/label'
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Checkbox } from '@/components/ui/checkbox'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Progress } from '@/components/ui/progress'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
+import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { Textarea } from '@/components/ui/textarea'
 
 const PaymentForm = ({ student, onSuccess }) => {
   const [method, setMethod] = useState('cash')
@@ -290,7 +287,7 @@ const PaymentForm = ({ student, onSuccess }) => {
               <div>
                 <Label htmlFor="amount">Payment Amount (BDT) *</Label>
                 <div className="relative">
-                  <DollarSign className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
+                  {/* <span className="w-8 h-8 text-muted-foreground text-lg">৳</span> */}
                   <Input
                     id="amount"
                     type="number"

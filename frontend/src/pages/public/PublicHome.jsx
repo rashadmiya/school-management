@@ -93,9 +93,9 @@ const HeroSlider = ({ slides }) => {
                                         {slide.subtitle}
                                     </p>
                                 )}
-                                <p className="text-lg mb-8 max-w-2xl mx-auto drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
+                                {/* <p className="text-lg mb-8 max-w-2xl mx-auto drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)]">
                                     We provide quality education in a nurturing environment that fosters academic excellence and personal growth.
-                                </p>
+                                </p> */}
                                 <div className="flex gap-4 justify-center flex-wrap">
                                     <Button size="lg" variant="secondary" asChild>
                                         <Link to={slide.link || "/about"}>

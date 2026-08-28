@@ -1,12 +1,11 @@
 // components/Dashboard.jsx
+import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Badge } from '@/components/ui/badge'
-import { useAppSelector } from '@/features/store'
-import { Users, BookOpen, GraduationCap, TrendingUp, Calendar, DollarSign, AlertCircle, BarChart3 } from 'lucide-react'
-import React from 'react'
-import { useNavigate } from 'react-router-dom'
 import { useGetAdminDashboardQuery } from '@/features/apis/api'
+import { useAppSelector } from '@/features/store'
+import { AlertCircle, BarChart3, BookOpen, Calendar, GraduationCap, TrendingUp, Users } from 'lucide-react'
+import { useNavigate } from 'react-router-dom'
 
 const Dashboard = () => {
     const navigate = useNavigate();
@@ -32,29 +31,29 @@ const Dashboard = () => {
             orange: isDarkMode ? "bg-orange-500/20 text-orange-400" : "bg-orange-100 text-orange-600",
         },
         stat: {
-            green: isDarkMode 
-                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+            green: isDarkMode
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                 : "bg-green-50 text-green-800",
-            red: isDarkMode 
-                ? "bg-red-500/10 border-red-500/20 text-red-400" 
+            red: isDarkMode
+                ? "bg-red-500/10 border-red-500/20 text-red-400"
                 : "bg-red-50 text-red-800",
         },
         alert: {
-            yellow: isDarkMode 
-                ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-400" 
+            yellow: isDarkMode
+                ? "bg-yellow-500/10 border-yellow-500/20 text-yellow-400"
                 : "bg-yellow-50 border-yellow-200 text-yellow-800",
-            blue: isDarkMode 
-                ? "bg-blue-500/10 border-blue-500/20 text-blue-400" 
+            blue: isDarkMode
+                ? "bg-blue-500/10 border-blue-500/20 text-blue-400"
                 : "bg-blue-50 border-blue-200 text-blue-800",
-            green: isDarkMode 
-                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400" 
+            green: isDarkMode
+                ? "bg-emerald-500/10 border-emerald-500/20 text-emerald-400"
                 : "bg-green-50 border-green-200 text-green-800",
-            gray: isDarkMode 
-                ? "bg-gray-800/50 border-gray-700 text-gray-300" 
+            gray: isDarkMode
+                ? "bg-gray-800/50 border-gray-700 text-gray-300"
                 : "bg-gray-50 border-gray-200 text-gray-800",
         },
-        paymentItem: isDarkMode 
-            ? "border-gray-700" 
+        paymentItem: isDarkMode
+            ? "border-gray-700"
             : "border-gray-200",
         progress: {
             bg: isDarkMode ? "bg-gray-700" : "bg-gray-200",
@@ -64,15 +63,15 @@ const Dashboard = () => {
             orange: "bg-orange-500",
         },
         button: {
-            outline: isDarkMode 
-                ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white" 
+            outline: isDarkMode
+                ? "border-gray-700 text-gray-300 hover:bg-gray-800 hover:text-white"
                 : "border-gray-200 text-gray-700 hover:bg-gray-50",
-            primary: isDarkMode 
-                ? "bg-blue-600 hover:bg-blue-700 text-white" 
+            primary: isDarkMode
+                ? "bg-blue-600 hover:bg-blue-700 text-white"
                 : "bg-blue-600 hover:bg-blue-700 text-white",
         },
-        portalCard: isDarkMode 
-            ? "bg-gray-800/50 border-gray-700 hover:border-gray-600" 
+        portalCard: isDarkMode
+            ? "bg-gray-800/50 border-gray-700 hover:border-gray-600"
             : "bg-white border-gray-200 hover:shadow-lg",
         loading: isDarkMode ? "border-blue-400" : "border-blue-600",
     };
@@ -206,7 +205,7 @@ const Dashboard = () => {
                 <Card className={`${isDarkMode ? "bg-gray-900/50 border-gray-800" : "bg-white border-gray-200"} shadow-sm`}>
                     <CardHeader>
                         <CardTitle className={`flex items-center gap-2 ${isDarkMode ? "text-white" : "text-gray-900"}`}>
-                            <DollarSign className="w-5 h-5" />
+                            <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
                             Financial Overview
                         </CardTitle>
                     </CardHeader>
@@ -291,7 +290,7 @@ const Dashboard = () => {
                                         {dashboard.todayAttendance?.present || 0}
                                     </span>
                                     <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
-                                        <div 
+                                        <div
                                             className={`${theme.progress.green} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.present || 0)}%` }}
                                         ></div>
@@ -306,7 +305,7 @@ const Dashboard = () => {
                                         {dashboard.todayAttendance?.absent || 0}
                                     </span>
                                     <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
-                                        <div 
+                                        <div
                                             className={`${theme.progress.red} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.absent || 0)}%` }}
                                         ></div>
@@ -321,7 +320,7 @@ const Dashboard = () => {
                                         {dashboard.todayAttendance?.late || 0}
                                     </span>
                                     <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
-                                        <div 
+                                        <div
                                             className={`${theme.progress.yellow} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.late || 0)}%` }}
                                         ></div>
@@ -336,7 +335,7 @@ const Dashboard = () => {
                                         {dashboard.todayAttendance?.half_day || 0}
                                     </span>
                                     <div className={`w-20 ${theme.progress.bg} rounded-full h-2`}>
-                                        <div 
+                                        <div
                                             className={`${theme.progress.orange} h-2 rounded-full transition-all duration-500`}
                                             style={{ width: `${getPercentage(dashboard.todayAttendance?.half_day || 0)}%` }}
                                         ></div>
@@ -395,7 +394,7 @@ const Dashboard = () => {
                             {dashboard.alerts?.feeCollection && (
                                 <div className={`p-3 border rounded-lg ${theme.alert.green}`}>
                                     <div className="flex items-center gap-2">
-                                        <DollarSign className="w-4 h-4" />
+                                        <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
                                         <span className="font-medium">
                                             ${(dashboard.financial?.pendingFees || 0).toLocaleString()} in pending fees
                                         </span>
@@ -447,7 +446,7 @@ const Dashboard = () => {
 
                             <Button variant="outline" className={`flex flex-col items-center gap-2 h-auto py-4 ${theme.button.outline}`}
                                 onClick={() => navigate("/finance")}>
-                                <DollarSign className="w-6 h-6" />
+                                <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
                                 <span>Finance</span>
                             </Button>
                         </div>

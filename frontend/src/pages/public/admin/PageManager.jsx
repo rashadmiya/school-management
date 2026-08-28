@@ -162,14 +162,14 @@ export default function PageManager() {
                                                 <div className="flex items-center gap-2">
                                                     {page.title}
                                                     {page.slug === 'home' && (
-                                                        <Badge variant="outline" className="text-xs">
+                                                        <Badge variant="outline" className="text-xs text-gray-800">
                                                             Home
                                                         </Badge>
                                                     )}
                                                 </div>
                                             </TableCell>
                                             <TableCell>
-                                                <code className="text-sm bg-gray-100 px-2 py-1 rounded">/{page.slug}</code>
+                                                <code className="text-sm bg-gray-100 text-gray-800 px-2 py-1 rounded">/{page.slug}</code>
                                             </TableCell>
                                             <TableCell>
                                                 <Badge

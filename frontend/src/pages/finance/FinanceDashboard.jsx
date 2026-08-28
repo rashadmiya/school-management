@@ -9,7 +9,6 @@ import { SESSION_OPTIONS } from '@/utils/constants'
 import {
     AlertCircle,
     CreditCard,
-    DollarSign,
     Download,
     Eye,
     FileText,
@@ -211,7 +210,7 @@ const FinanceDashboard = () => {
                         <CardTitle className={`text-sm font-medium ${isDarkMode ? "text-gray-300" : "text-gray-700"}`}>
                             Outstanding
                         </CardTitle>
-                        <DollarSign className={`h-4 w-4 ${isDarkMode ? "text-gray-400" : "text-muted-foreground"}`} />
+                        <span className="h-6 w-6 text-muted-foreground text-lg">৳</span>
                     </CardHeader>
                     <CardContent>
                         <div className={`text-2xl font-bold ${isDarkMode ? "text-white" : "text-gray-900"}`}>

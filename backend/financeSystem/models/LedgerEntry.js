@@ -13,7 +13,7 @@ const ledgerEntrySchema = new mongoose.Schema({
     transactionId: {
         type: String,
         required: true,
-        index: true
+        // index: true
     },
     type: {
         type: String,
@@ -79,7 +79,6 @@ const ledgerEntrySchema = new mongoose.Schema({
 // Indexes for performance
 ledgerEntrySchema.index({ student: 1, createdAt: -1 });
 ledgerEntrySchema.index({ student: 1, transactionId: 1 });
-ledgerEntrySchema.index({ transactionId: 1 });
 ledgerEntrySchema.index({ refModel: 1, refId: 1 });
 ledgerEntrySchema.index({ session: 1, createdAt: -1 });
 

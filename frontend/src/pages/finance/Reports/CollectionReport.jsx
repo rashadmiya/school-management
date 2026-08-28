@@ -1,6 +1,4 @@
 // src/pages/Reports/CollectionReport.jsx - FIXED VERSION
-import { useGetPaymentCollectionReportQuery } from '@/features/apis/finance/paymentApi'
-import { CLASS_OPTIONS, PAYMENT_METHODS, SESSION_OPTIONS } from '@/utils/constants'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
@@ -8,21 +6,21 @@ import { Input } from '@/components/ui/input'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useGetFeeCollectionReportQuery } from '@/features/apis/finance/feeApi'
-import { formatCurrency, formatDate } from '@/lib/formaters'
+import { useGetPaymentCollectionReportQuery } from '@/features/apis/finance/paymentApi'
 import { useAppSelector } from '@/features/store'
-import {
-  BarChart3,
-  Calendar,
-  CreditCard,
-  DollarSign,
-  Download,
-  Filter,
-  PieChart,
-  TrendingUp,
-  Users
-} from 'lucide-react'
-import { useState, useEffect } from 'react'
 import { useCurrentSession } from '@/hooks/useCurrentSession'
+import { formatCurrency, formatDate } from '@/lib/formaters'
+import { CLASS_OPTIONS, PAYMENT_METHODS, SESSION_OPTIONS } from '@/utils/constants'
+import {
+    BarChart3,
+    Calendar,
+    CreditCard,
+    Download,
+    Filter,
+    PieChart,
+    Users
+} from 'lucide-react'
+import { useEffect, useState } from 'react'
 
 // Theme hook
 const useTheme = () => {
@@ -338,7 +336,7 @@ const CollectionReport = () => {
                 <Card className={`${theme.bgCard} ${theme.border} shadow-sm`}>
                     <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                         <CardTitle className={`text-sm font-medium ${theme.textSecondary}`}>Total Collection</CardTitle>
-                        <DollarSign className={`h-4 w-4 ${theme.stat.green}`} />
+                        <span className={`text-muted-foreground text-lg w-4 h-4 ${theme.stat.green}`}>৳</span>
                     </CardHeader>
                     <CardContent>
                         <div className={`text-3xl font-bold ${theme.stat.green}`}>

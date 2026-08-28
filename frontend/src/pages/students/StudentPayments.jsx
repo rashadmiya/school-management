@@ -1,14 +1,14 @@
 // components/student/StudentPayments.jsx
-import React, { useState } from "react";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { DollarSign, Download, FileText, Calendar, ArrowLeft, Search, Filter } from "lucide-react";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { useGetStudentPaymentsQuery } from "@/features/apis/studentsApi";
+import { ArrowLeft, Calendar, Download, FileText, Filter } from "lucide-react";
+import { useState } from "react";
 import { Link } from "react-router-dom";
 
 export default function StudentPayments() {
@@ -117,7 +117,7 @@ export default function StudentPayments() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
         <Card>
           <CardContent className="p-6 text-center">
-            <DollarSign className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+            <span className="mr-2 mx-auto text-blue-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
             <p className="text-2xl font-bold">{formatCurrency(summary?.totalDue)}</p>
             <p className="text-sm text-gray-600">Total Due</p>
           </CardContent>
@@ -125,7 +125,7 @@ export default function StudentPayments() {
 
         <Card>
           <CardContent className="p-6 text-center">
-            <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+            <span className="mr-2 mx-auto text-green-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
             <p className="text-2xl font-bold">{formatCurrency(summary?.totalPaid)}</p>
             <p className="text-sm text-gray-600">Total Paid</p>
           </CardContent>
@@ -133,7 +133,7 @@ export default function StudentPayments() {
 
         <Card>
           <CardContent className="p-6 text-center">
-            <DollarSign className="w-8 h-8 text-red-600 mx-auto mb-2" />
+            <span className="mr-2 mx-auto text-red-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
             <p className="text-2xl font-bold">{formatCurrency(summary?.outstanding)}</p>
             <p className="text-sm text-gray-600">Outstanding</p>
           </CardContent>

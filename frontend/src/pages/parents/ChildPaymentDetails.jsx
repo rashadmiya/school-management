@@ -1,19 +1,18 @@
 // components/parent/ChildPaymentDetails.jsx
-import React from "react";
-import { useParams, Link } from "react-router-dom";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { ArrowLeft, Download, DollarSign, Calendar, FileText } from "lucide-react";
 import { useGetChildPaymentDetailsQuery } from "@/features/apis/parentsApi";
+import { ArrowLeft, Calendar, Download, FileText } from "lucide-react";
+import { Link, useParams } from "react-router-dom";
 
 export default function ChildPaymentDetails() {
   const { childId } = useParams();
-  const { data, isLoading } = useGetChildPaymentDetailsQuery({ 
-    childId, 
-    page: 1, 
-    limit: 20 
+  const { data, isLoading } = useGetChildPaymentDetailsQuery({
+    childId,
+    page: 1,
+    limit: 20
   });
 
   if (isLoading) return <div>Loading payment details...</div>;
@@ -61,21 +60,21 @@ export default function ChildPaymentDetails() {
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 text-center">
-            <DollarSign className="w-8 h-8 text-blue-600 mx-auto mb-2" />
+            <span className="mr-2 mx-auto w-8 h-8 text-blue-600 text-muted-foreground text-lg">৳</span>
             <p className="text-lg font-bold">{formatCurrency(summary?.totalDue)}</p>
             <p className="text-sm text-gray-600">Total Due</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <DollarSign className="w-8 h-8 text-green-600 mx-auto mb-2" />
+            <span className="mr-2 mx-auto text-green-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
             <p className="text-lg font-bold">{formatCurrency(summary?.totalPaid)}</p>
             <p className="text-sm text-gray-600">Total Paid</p>
           </CardContent>
         </Card>
         <Card>
           <CardContent className="p-4 text-center">
-            <DollarSign className="w-8 h-8 text-red-600 mx-auto mb-2" />
+            <span className="mr-2 mx-auto text-red-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
             <p className="text-lg font-bold">{formatCurrency(summary?.outstanding)}</p>
             <p className="text-sm text-gray-600">Outstanding</p>
           </CardContent>
