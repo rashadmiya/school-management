@@ -15,8 +15,8 @@ export const SETTING_TYPES = [
     { value: 'number', label: 'Number', example: '2024', hint: 'Numeric values only' },
     { value: 'boolean', label: 'Toggle (On/Off)', example: 'true/false', hint: 'Enable or disable features' },
     { value: 'array', label: 'Array (Comma-separated)', example: 'value1, value2, value3', hint: 'Multiple values separated by commas' },
-    { value: 'object', label: 'Object (JSON)', example: '{"key": "value"}', hint: 'Structured data in JSON format' },
-    { value: 'file', label: 'File', example: 'image.png, document.pdf', hint: 'File uploads (images, documents)' },
+    // { value: 'object', label: 'Object (JSON)', example: '{"key": "value"}', hint: 'Structured data in JSON format' },
+    // { value: 'file', label: 'File', example: 'image.png, document.pdf', hint: 'File uploads (images, documents)' },
 ];
 
 export const SETTING_EXAMPLES = {

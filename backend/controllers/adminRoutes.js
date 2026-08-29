@@ -11,6 +11,9 @@ const { isAuthenticated, authorizeRoles } = require("../middleware/auth");
 const Page = require("../models/Page");
 const catchAsyncErrors = require("../middleware/catchAsyncErrors");
 const Setting = require("../models/Setting");
+const { uploadLogoImage } = require("../multer");
+const path = require("path");
+const fs = require("fs");
 
 // Complete Admin Dashboard
 router.get("/dashboard", isAuthenticated,
@@ -553,5 +556,102 @@ router.get("/settings-by-category/:category", isAuthenticated, authorizeRoles("a
         next(error);
     }
 }));
+
+// 🎯 Upload school logo
+router.post("/upload-logo",
+    isAuthenticated,
+    authorizeRoles("admin"),
+    uploadLogoImage, // Using existing multer middleware
+    catchAsyncErrors(async (req, res, next) => {
+        try {
+            if (!req.file) {
+                return next(new ErrorHandler("Please upload an image", 400));
+            }
+
+            // Validate file type
+            const allowedTypes = ['image/jpeg', 'image/png', 'image/webp', 'image/jpg', 'image/svg+xml'];
+            if (!allowedTypes.includes(req.file.mimetype)) {
+                // Delete uploaded file if invalid
+                if (req.file) {
+                    fs.unlink(req.file.path, (err) => err && console.log(err));
+                }
+                return next(new ErrorHandler("Please upload a valid image (JPEG, PNG, WebP, SVG)", 400));
+            }
+
+            // Validate file size (max 2MB for logo)
+            if (req.file.size > 2 * 1024 * 1024) {
+                // Delete uploaded file if too large
+                if (req.file) {
+                    fs.unlink(req.file.path, (err) => err && console.log(err));
+                }
+                return next(new ErrorHandler("Logo size should be less than 2MB", 400));
+            }
+
+            const logoUrl = `/uploads/logos/${req.file.filename}`;
+
+            // Update or create the SCHOOL_LOGO setting
+            const setting = await Setting.findOneAndUpdate(
+                { key: 'SCHOOL_LOGO' },
+                {
+                    key: 'SCHOOL_LOGO',
+                    value: logoUrl,
+                    type: 'string',
+                    category: 'general',
+                    label: 'School Logo',
+                    description: 'School logo image displayed on the website header',
+                    isPublic: true
+                },
+                { upsert: true, new: true, runValidators: true }
+            );
+
+            res.status(200).json({
+                success: true,
+                message: "Logo uploaded successfully",
+                data: setting
+            });
+
+        } catch (error) {
+            // Clean up uploaded file if error occurs
+            if (req.file) {
+                fs.unlink(req.file.path, (err) => err && console.log(err));
+            }
+            next(error);
+        }
+    })
+);
+
+// 🎯 Delete logo
+router.delete("/logo",
+    isAuthenticated,
+    authorizeRoles("admin"),
+    catchAsyncErrors(async (req, res, next) => {
+        try {
+            // Find the logo setting
+            const setting = await Setting.findOne({ key: 'SCHOOL_LOGO' });
+            if (!setting) {
+                return next(new ErrorHandler("Logo not found", 404));
+            }
+
+            // Delete the file from server
+            if (setting.value) {
+                const filePath = path.join(__dirname, "..", setting.value);
+                fs.unlink(filePath, (err) => {
+                    if (err) console.log("Error deleting logo file:", err);
+                });
+            }
+
+            // Delete the setting
+            await setting.deleteOne();
+
+            res.status(200).json({
+                success: true,
+                message: "Logo deleted successfully"
+            });
+
+        } catch (error) {
+            next(error);
+        }
+    })
+);
 
 module.exports = router;

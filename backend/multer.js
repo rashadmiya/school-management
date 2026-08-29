@@ -96,6 +96,30 @@ const uploadDocument = multer({
   fileFilter: documentFileFilter,
 });
 
+// Custom middleware for logo upload
+const uploadLogo = multer({
+    storage: multer.diskStorage({
+        destination(req, file, cb) {
+            const fullPath = path.join(__dirname, "uploads/logos");
+            if (!fs.existsSync(fullPath)) {
+                fs.mkdirSync(fullPath, { recursive: true });
+            }
+            cb(null, fullPath);
+        },
+        filename(req, file, cb) {
+            const ext = path.extname(file.originalname);
+            const name = path.parse(file.originalname).name.replace(/\s+/g, "-");
+            const filename = `logo-${Date.now()}${ext}`;
+            console.log("Generated logo filename:", filename);
+            cb(null, filename);
+        }
+    }),
+    limits: {
+        fileSize: 2 * 1024 * 1024, // 2MB limit for logos
+    },
+    fileFilter: imageFileFilter,
+});
+
 // Single image upload middleware
 const uploadSingleImage = upload.single("image");
 const uploadSinglePhoto = upload.single("photo");
@@ -103,6 +127,7 @@ const uploadSingleDocument = uploadDocument.single("document");
 const uploadHeroImage = upload.single("hero"); // Add this
 // Multiple images upload
 const uploadMultipleImages = upload.array("images", 10);
+const uploadLogoImage = uploadLogo.single("logo"); // field name will be 'logo'
 
 module.exports = {
   upload,
@@ -111,37 +136,6 @@ module.exports = {
   uploadSinglePhoto,
   uploadSingleDocument,
   uploadMultipleImages,
-  uploadHeroImage
+  uploadHeroImage,
+  uploadLogoImage
 };
-
-// const multer = require("multer");
-// const path = require("path");
-// const fs = require("fs");
-
-// const storage = multer.diskStorage({
-//   destination(req, file, cb) {
-//     let uploadPath = "uploads/others";
-
-//     if (file.fieldname === "photo") {
-//       if (req.baseUrl.includes("students")) {
-//         uploadPath = "uploads/avatars/students";
-//       } else if (req.baseUrl.includes("teachers")) {
-//         uploadPath = "uploads/avatars/teachers";
-//       }
-//     }
-
-//     // const fullPath = path.join(__dirname, "..", uploadPath);
-//     const fullPath = path.join(__dirname, uploadPath);
-
-//     fs.mkdirSync(fullPath, { recursive: true });
-//     cb(null, fullPath);
-//   },
-
-//   filename(req, file, cb) {
-//     const ext = path.extname(file.originalname);
-//     const name = path.parse(file.originalname).name.replace(/\s+/g, "-");
-//     cb(null, `${name}-${Date.now()}${ext}`);
-//   }
-// });
-
-// exports.upload = multer({ storage });

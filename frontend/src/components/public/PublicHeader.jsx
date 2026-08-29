@@ -187,6 +187,8 @@ const PublicHeader = () => {
         setOpenMobileSub(openMobileSub === index ? null : index);
     };
 
+    console.log("settings:", settings)
+
     return (
         <header className="w-full px-10 bg-white border-b border-gray-200 shadow-sm sticky top-0 z-50">
             <div className="w-full">
@@ -197,7 +199,7 @@ const PublicHeader = () => {
                         className="flex items-center space-x-3 flex-shrink-0"
                     >
                         <img
-                            src={`${backend_url}$settings.SCHOOL_LOGO` || schoolLogo}
+                            src={`${backend_url}${settings.SCHOOL_LOGO}` || schoolLogo}
                             alt="School Logo"
                             className="h-10 w-10 object-contain rounded-full border border-gray-200"
                         />

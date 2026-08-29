@@ -290,6 +290,25 @@ export const api = createApi({
             invalidatesTags: ['AdminSetting', 'Settings'],
         }),
 
+        // Upload logo
+        uploadLogo: builder.mutation({
+            query: (formData) => ({
+                url: '/admin/upload-logo',
+                method: 'POST',
+                body: formData,
+            }),
+            invalidatesTags: ['Setting'],
+        }),
+
+        // Delete logo
+        deleteLogo: builder.mutation({
+            query: () => ({
+                url: '/admin/logo',
+                method: 'DELETE',
+            }),
+            invalidatesTags: ['Setting'],
+        }),
+
         // announcement endpoints
         getAdminAnnouncements: builder.query({
             query: (params = {}) => ({
@@ -367,6 +386,8 @@ export const {
     useUpdateSettingMutation,
     useUpdateSettingsBulkMutation,
     useDeleteSettingMutation,
+    useUploadLogoMutation,
+    useDeleteLogoMutation,
     //announcement
     useGetAdminAnnouncementsQuery,
     useGetAdminAnnouncementQuery,

@@ -1,11 +1,11 @@
 // components/admin/SettingsContent.jsx
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Plus } from "lucide-react";
-import { SETTING_CATEGORIES } from "./settingsConstants";
-import SettingField from "./SettingField";
-import SuggestedSettings from "./SuggestedSettings";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useAppSelector } from "@/features/store";
+import { Plus } from "lucide-react";
+import SettingField from "./SettingField";
+import { SETTING_CATEGORIES } from "./settingsConstants";
+import SuggestedSettings from "./SuggestedSettings";
 
 const useTheme = () => {
     const isDarkMode = useAppSelector((state) => state.global.isDarkMode);
