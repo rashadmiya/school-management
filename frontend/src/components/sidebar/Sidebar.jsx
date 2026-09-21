@@ -19,7 +19,7 @@ import {
   ChevronRight,
   LogOut
 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 
 import { navItems } from "@/lib/sidebarConstant";
@@ -38,6 +38,18 @@ export default function Sidebar() {
     (state) => state.global.isSidebarCollapsed
   );
   const roleName = (user?.role?.name || user?.role || "student").toString();
+
+
+  useEffect(() => {
+    // Auto-expand parent of active route
+    const expanded = {};
+    navItems.forEach((item) => {
+      if (item.children?.some((child) => location.pathname.startsWith(child.path))) {
+        expanded[item.label] = true;
+      }
+    });
+    setExpandedMenus((prev) => ({ ...prev, ...expanded }));
+  }, [location.pathname]);
 
   const toggleMenu = (menuKey) => {
     if (isSidebarCollapsed) return;

@@ -12,7 +12,7 @@ const userSchema = new mongoose.Schema({
   avatar: String,
   role: { type: mongoose.Schema.Types.ObjectId, ref: 'Role', },
   teacherRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Teacher' }, // if teacher extra data stored separately
-  parentRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Parent' },
+  // parentRef: { type: mongoose.Schema.Types.ObjectId, ref: 'Parent' },
   resetPasswordToken: String,
   resetPasswordExpire: Date,
 }, { timestamps: true });

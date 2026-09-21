@@ -4,12 +4,13 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardHeader, CardTitle, CardContent } from "@/components/ui/card";
 import { Loader2 } from "lucide-react";
-import { useNavigate } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { useLoginMutation } from "@/features/apis/authApi";
 import { useLoginStudentMutation } from "@/features/apis/studentsApi";
 
 export default function Login() {
   const [formData, setFormData] = useState({ identifier: "", password: "" });
+  const [showPassword, setShowPassword] = useState(false);
   const [loginUser, { isLoading: loadingUser }] = useLoginMutation();
   const [loginStudent, { isLoading: loadingStudent }] = useLoginStudentMutation();
   const navigate = useNavigate();
@@ -27,28 +28,28 @@ export default function Login() {
 
     try {
       if (isStudentLogin) {
-        let studentLoginRes = await loginStudent({ 
-          rollNumber: formData.identifier, 
-          password: formData.password 
+        let studentLoginRes = await loginStudent({
+          rollNumber: formData.identifier,
+          password: formData.password
         }).unwrap();
-        
+
         if (studentLoginRes.success) {
           navigate("/student");
         }
       } else {
-        const userLoginRes = await loginUser({ 
-          email: formData.identifier, 
-          password: formData.password 
+        const userLoginRes = await loginUser({
+          email: formData.identifier,
+          password: formData.password
         }).unwrap();
-        
+
         console.log("userLoginRes :", userLoginRes);
 
         if (userLoginRes.success) {
           // Check if user and role exist before accessing
           if (userLoginRes.user && userLoginRes.user.role) {
             console.log("userLoginRes.user.role.name :", userLoginRes.user.role.name);
-            
-            switch(userLoginRes.user.role.name) {
+
+            switch (userLoginRes.user.role.name) {
               case 'admin':
                 navigate("/admin/dashboard");
                 break;
@@ -109,15 +110,25 @@ export default function Login() {
                   Forgot password?
                 </a>
               </div>
-              <Input
-                type="password"
-                name="password"
-                placeholder="Enter password"
-                value={formData.password}
-                onChange={handleChange}
-                required
-                className="h-11"
-              />
+              <div className="relative">
+                <Input
+                  type={showPassword ? "text" : "password"}
+                  name="password"
+                  // hidePassword={!showPassword}
+                  placeholder="Enter password"
+                  value={formData.password}
+                  onChange={handleChange}
+                  required
+                  className="h-11"
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="absolute inset-y-0 right-0 px-3 flex items-center text-gray-500"
+                >
+                  {showPassword ? "Hide" : "Show"}
+                </button>
+              </div>
             </div>
 
             {error && (
@@ -126,14 +137,14 @@ export default function Login() {
               </div>
             )}
 
-            <Button 
-              className="w-full h-11 text-base" 
-              type="submit" 
+            <Button
+              className="w-full h-11 text-base"
+              type="submit"
               disabled={loadingUser || loadingStudent}
             >
               {loadingUser || loadingStudent ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> 
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   Logging in...
                 </>
               ) : (
@@ -146,6 +157,13 @@ export default function Login() {
               <a href="#" className="text-primary font-medium hover:underline">
                 Sign up
               </a>
+            </div>
+            {/* NEW */}
+            <div className="text-center text-sm text-gray-500 pt-2 border-t mt-4">
+              Parent?{" "}
+              <Link to="/parent/login" className="text-emerald-600 font-medium hover:underline">
+                Sign in to the Parent Portal
+              </Link>
             </div>
           </form>
         </CardContent>

@@ -15,121 +15,98 @@ const { uploadLogoImage } = require("../multer");
 const path = require("path");
 const fs = require("fs");
 
-// Complete Admin Dashboard
-router.get("/dashboard", isAuthenticated,
+const { getCurrentSession } = require('../utils/accademicSession');
+const FeeInstance = require('../financeSystem/models/FeeInstance');
+const { toString } = require('../utils/decimal');
+
+router.get("/dashboard",
+    isAuthenticated,
     authorizeRoles("admin", "teacher"),
     async (req, res, next) => {
         try {
-            console.log("admin dasboard called")
-            // Basic counts
+            const session = req.query.session || getCurrentSession();
+
+            /* ---------------- Basic counts (unchanged) ---------------- */
             const totalStudents = await Student.countDocuments();
             const totalTeachers = await Teacher.countDocuments();
-            const totalClasses = await Class.countDocuments();
+            const totalClasses  = await Class.countDocuments();
             const totalSubjects = await Subject.countDocuments();
 
-            // Financial metrics
+            /* ---------------- Financial metrics (REWRITTEN) ---------------- */
             const currentMonth = new Date().getMonth() + 1;
-            const currentYear = new Date().getFullYear();
+            const currentYear  = new Date().getFullYear();
 
+            // Monthly revenue = payments received this calendar month in this session.
+            // Payment is now a "money in" record; status is 'completed' (not 'paid').
             const monthlyRevenue = await Payment.aggregate([
                 {
                     $match: {
-                        status: { $in: ['paid', 'partial'] },
-                        paidDate: {
+                        session,
+                        status: 'completed',
+                        createdAt: {
                             $gte: new Date(currentYear, currentMonth - 1, 1),
-                            $lt: new Date(currentYear, currentMonth, 1)
-                        }
-                    }
+                            $lt:  new Date(currentYear, currentMonth, 1),
+                        },
+                    },
                 },
-                {
-                    $group: {
-                        _id: null,
-                        total: { $sum: '$paidAmount' }
-                    }
-                }
+                { $group: { _id: null, total: { $sum: '$amount' } } },
             ]);
 
-            const pendingFees = await Payment.aggregate([
+            // Outstanding fees — read from FeeInstance, not Payment.
+            const pendingFees = await FeeInstance.aggregate([
                 {
                     $match: {
-                        status: { $in: ['pending', 'overdue'] },
-                        dueDate: { $lt: new Date() }
-                    }
+                        session,
+                        isActive: true,
+                        status: { $in: ['unpaid', 'partial', 'overdue'] },
+                        dueAmount: { $gt: 0 },
+                    },
                 },
                 {
                     $group: {
                         _id: null,
-                        total: { $sum: { $subtract: ['$amount', '$paidAmount'] } }
-                    }
-                }
+                        total: { $sum: '$dueAmount' },
+                        count: { $sum: 1 },
+                    },
+                },
             ]);
 
-            // Today's attendance
-            const today = new Date();
-            today.setHours(0, 0, 0, 0);
-            const tomorrow = new Date(today);
-            tomorrow.setDate(tomorrow.getDate() + 1);
+            /* ---------------- Attendance (unchanged) ---------------- */
+            const today = new Date(); today.setHours(0, 0, 0, 0);
+            const tomorrow = new Date(today); tomorrow.setDate(tomorrow.getDate() + 1);
 
             const todayAttendance = await Attendance.aggregate([
-                {
-                    $match: {
-                        date: {
-                            $gte: today,
-                            $lt: tomorrow
-                        }
-                    }
-                },
-                {
-                    $group: {
-                        _id: '$status',
-                        count: { $sum: 1 }
-                    }
-                }
+                { $match: { date: { $gte: today, $lt: tomorrow } } },
+                { $group: { _id: '$status', count: { $sum: 1 } } },
             ]);
 
-            // Convert to object for easy access
-            const todayAttendanceObj = {
-                present: 0,
-                absent: 0,
-                late: 0,
-                half_day: 0
-            };
-
+            const todayAttendanceObj = { present: 0, absent: 0, late: 0, half_day: 0 };
             todayAttendance.forEach(item => {
                 todayAttendanceObj[item._id] = item.count;
             });
 
-            // Overall attendance rate (last 30 days)
             const thirtyDaysAgo = new Date();
             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-            const recentAttendance = await Attendance.find({
-                date: { $gte: thirtyDaysAgo }
-            });
-
-            const totalRecords = recentAttendance.length;
+            const recentAttendance = await Attendance.find({ date: { $gte: thirtyDaysAgo } });
+            const totalRecords   = recentAttendance.length;
             const presentRecords = recentAttendance.filter(a => a.status === 'present').length;
-            const lateRecords = recentAttendance.filter(a => a.status === 'late').length;
+            const lateRecords    = recentAttendance.filter(a => a.status === 'late').length;
             const halfDayRecords = recentAttendance.filter(a => a.status === 'half_day').length;
 
-            const weightedPresent = presentRecords + (lateRecords * 0.5) + (halfDayRecords * 0.5);
+            const weightedPresent = presentRecords + lateRecords * 0.5 + halfDayRecords * 0.5;
             const attendanceRate = totalRecords > 0 ? (weightedPresent / totalRecords) * 100 : 0;
 
-            // Low attendance classes (below 75%)
             const classAttendance = await Attendance.aggregate([
-                {
-                    $match: {
-                        date: { $gte: thirtyDaysAgo }
-                    }
-                },
+                { $match: { date: { $gte: thirtyDaysAgo } } },
                 {
                     $group: {
                         _id: '$class',
-                        present: { $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] } },
-                        late: { $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] } },
+                        present:  { $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] } },
+                        late:     { $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] } },
                         half_day: { $sum: { $cond: [{ $eq: ['$status', 'half_day'] }, 1, 0] } },
-                        total: { $sum: 1 }
-                    }
+                        total:    { $sum: 1 },
+                    },
                 },
                 {
                     $project: {
@@ -138,33 +115,44 @@ router.get("/dashboard", isAuthenticated,
                                 {
                                     $divide: [
                                         { $add: ['$present', { $multiply: ['$late', 0.5] }, { $multiply: ['$half_day', 0.5] }] },
-                                        '$total'
-                                    ]
+                                        '$total',
+                                    ],
                                 },
-                                100
-                            ]
-                        }
-                    }
+                                100,
+                            ],
+                        },
+                    },
                 },
-                {
-                    $match: {
-                        attendanceRate: { $lt: 75 }
-                    }
-                }
+                { $match: { attendanceRate: { $lt: 75 } } },
             ]);
 
-            // Recent payments for dashboard
+            /* ---------------- Recent payments (REWRITTEN) ---------------- */
             const recentPayments = await Payment.find({
-                status: { $in: ['paid', 'partial'] }
+                session,
+                status: 'completed',
             })
-                .populate('student', 'name rollNumber')
-                .populate('class', 'name')
-                .sort({ paidDate: -1 })
-                .limit(5);
+                .populate({
+                    path: 'student',
+                    select: 'name rollNumber class',
+                    populate: { path: 'class', select: 'name section' },
+                })
+                .populate('receivedBy', 'name')
+                .sort({ createdAt: -1 })
+                .limit(5)
+                .lean();
+
+            /* ---------------- Response ---------------- */
+            // Aggregations over Decimal128 return Decimal128 — coerce to
+            // plain strings before sending so the frontend can parse them.
+            const monthlyRevenueTotal = toString(monthlyRevenue[0]?.total || 0);
+            const pendingFeesTotal    = toString(pendingFees[0]?.total || 0);
+            const pendingFeesCount    = pendingFees[0]?.count || 0;
 
             res.status(200).json({
                 success: true,
                 dashboard: {
+                    session,
+
                     // Basic statistics
                     totalStudents,
                     totalTeachers,
@@ -173,8 +161,9 @@ router.get("/dashboard", isAuthenticated,
 
                     // Financial data
                     financial: {
-                        monthlyRevenue: monthlyRevenue[0]?.total || 0,
-                        pendingFees: pendingFees[0]?.total || 0
+                        monthlyRevenue: monthlyRevenueTotal,
+                        pendingFees:    pendingFeesTotal,
+                        pendingFeesCount,
                     },
 
                     // Attendance data
@@ -184,19 +173,219 @@ router.get("/dashboard", isAuthenticated,
                     // Alerts and insights
                     alerts: {
                         lowAttendanceClasses: classAttendance.length,
-                        upcomingEvents: 3, // You can integrate with events model later
-                        feeCollection: pendingFees[0]?.total > 0
+                        upcomingEvents: 3,
+                        feeCollection: pendingFeesCount > 0,
                     },
 
                     // Recent activity
-                    recentPayments
-                }
+                    recentPayments: recentPayments.map(p => ({
+                        _id: p._id,
+                        receiptNumber: p.receiptNumber,
+                        amount: toString(p.amount),
+                        method: p.method,
+                        status: p.status,
+                        session: p.session,
+                        createdAt: p.createdAt,
+                        receivedBy: p.receivedBy?.name || null,
+                        student: {
+                            _id: p.student?._id,
+                            name: p.student?.name,
+                            rollNumber: p.student?.rollNumber,
+                            class: p.student?.class?.name,
+                            section: p.student?.class?.section,
+                        },
+                    })),
+                },
             });
 
         } catch (error) {
             next(error);
         }
-    });
+    }
+);
+
+// // Complete Admin Dashboard
+// router.get("/dashboard", isAuthenticated,
+//     authorizeRoles("admin", "teacher"),
+//     async (req, res, next) => {
+//         try {
+//             console.log("admin dasboard called")
+//             // Basic counts
+//             const totalStudents = await Student.countDocuments();
+//             const totalTeachers = await Teacher.countDocuments();
+//             const totalClasses = await Class.countDocuments();
+//             const totalSubjects = await Subject.countDocuments();
+
+//             // Financial metrics
+//             const currentMonth = new Date().getMonth() + 1;
+//             const currentYear = new Date().getFullYear();
+
+//             const monthlyRevenue = await Payment.aggregate([
+//                 {
+//                     $match: {
+//                         status: { $in: ['paid', 'partial'] },
+//                         paidDate: {
+//                             $gte: new Date(currentYear, currentMonth - 1, 1),
+//                             $lt: new Date(currentYear, currentMonth, 1)
+//                         }
+//                     }
+//                 },
+//                 {
+//                     $group: {
+//                         _id: null,
+//                         total: { $sum: '$paidAmount' }
+//                     }
+//                 }
+//             ]);
+
+//             const pendingFees = await Payment.aggregate([
+//                 {
+//                     $match: {
+//                         status: { $in: ['pending', 'overdue'] },
+//                         dueDate: { $lt: new Date() }
+//                     }
+//                 },
+//                 {
+//                     $group: {
+//                         _id: null,
+//                         total: { $sum: { $subtract: ['$amount', '$paidAmount'] } }
+//                     }
+//                 }
+//             ]);
+
+//             // Today's attendance
+//             const today = new Date();
+//             today.setHours(0, 0, 0, 0);
+//             const tomorrow = new Date(today);
+//             tomorrow.setDate(tomorrow.getDate() + 1);
+
+//             const todayAttendance = await Attendance.aggregate([
+//                 {
+//                     $match: {
+//                         date: {
+//                             $gte: today,
+//                             $lt: tomorrow
+//                         }
+//                     }
+//                 },
+//                 {
+//                     $group: {
+//                         _id: '$status',
+//                         count: { $sum: 1 }
+//                     }
+//                 }
+//             ]);
+
+//             // Convert to object for easy access
+//             const todayAttendanceObj = {
+//                 present: 0,
+//                 absent: 0,
+//                 late: 0,
+//                 half_day: 0
+//             };
+
+//             todayAttendance.forEach(item => {
+//                 todayAttendanceObj[item._id] = item.count;
+//             });
+
+//             // Overall attendance rate (last 30 days)
+//             const thirtyDaysAgo = new Date();
+//             thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+//             const recentAttendance = await Attendance.find({
+//                 date: { $gte: thirtyDaysAgo }
+//             });
+
+//             const totalRecords = recentAttendance.length;
+//             const presentRecords = recentAttendance.filter(a => a.status === 'present').length;
+//             const lateRecords = recentAttendance.filter(a => a.status === 'late').length;
+//             const halfDayRecords = recentAttendance.filter(a => a.status === 'half_day').length;
+
+//             const weightedPresent = presentRecords + (lateRecords * 0.5) + (halfDayRecords * 0.5);
+//             const attendanceRate = totalRecords > 0 ? (weightedPresent / totalRecords) * 100 : 0;
+
+//             // Low attendance classes (below 75%)
+//             const classAttendance = await Attendance.aggregate([
+//                 {
+//                     $match: {
+//                         date: { $gte: thirtyDaysAgo }
+//                     }
+//                 },
+//                 {
+//                     $group: {
+//                         _id: '$class',
+//                         present: { $sum: { $cond: [{ $eq: ['$status', 'present'] }, 1, 0] } },
+//                         late: { $sum: { $cond: [{ $eq: ['$status', 'late'] }, 1, 0] } },
+//                         half_day: { $sum: { $cond: [{ $eq: ['$status', 'half_day'] }, 1, 0] } },
+//                         total: { $sum: 1 }
+//                     }
+//                 },
+//                 {
+//                     $project: {
+//                         attendanceRate: {
+//                             $multiply: [
+//                                 {
+//                                     $divide: [
+//                                         { $add: ['$present', { $multiply: ['$late', 0.5] }, { $multiply: ['$half_day', 0.5] }] },
+//                                         '$total'
+//                                     ]
+//                                 },
+//                                 100
+//                             ]
+//                         }
+//                     }
+//                 },
+//                 {
+//                     $match: {
+//                         attendanceRate: { $lt: 75 }
+//                     }
+//                 }
+//             ]);
+
+//             // Recent payments for dashboard
+//             const recentPayments = await Payment.find({
+//                 status: { $in: ['paid', 'partial'] }
+//             })
+//                 .populate('student', 'name rollNumber')
+//                 .populate('class', 'name')
+//                 .sort({ paidDate: -1 })
+//                 .limit(5);
+
+//             res.status(200).json({
+//                 success: true,
+//                 dashboard: {
+//                     // Basic statistics
+//                     totalStudents,
+//                     totalTeachers,
+//                     totalClasses,
+//                     totalSubjects,
+
+//                     // Financial data
+//                     financial: {
+//                         monthlyRevenue: monthlyRevenue[0]?.total || 0,
+//                         pendingFees: pendingFees[0]?.total || 0
+//                     },
+
+//                     // Attendance data
+//                     attendanceRate: Math.round(attendanceRate * 100) / 100,
+//                     todayAttendance: todayAttendanceObj,
+
+//                     // Alerts and insights
+//                     alerts: {
+//                         lowAttendanceClasses: classAttendance.length,
+//                         upcomingEvents: 3, // You can integrate with events model later
+//                         feeCollection: pendingFees[0]?.total > 0
+//                     },
+
+//                     // Recent activity
+//                     recentPayments
+//                 }
+//             });
+
+//         } catch (error) {
+//             next(error);
+//         }
+//     });
 
 // 🎯 Get all pages (admin)
 router.get("/all-pages", isAuthenticated, authorizeRoles("admin"), catchAsyncErrors(async (req, res, next) => {

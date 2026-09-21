@@ -1,5 +1,8 @@
 // models/FeeWaiver.js
 const mongoose = require('mongoose');
+const { moneyPlugin, Decimal128 } = require('../../utils/moneySchemaPlugin');
+const { toDecimal, toDecimal128 } = require('../../utils/decimal');
+
 
 const feeWaiverSchema = new mongoose.Schema({
     // Core References
@@ -14,7 +17,7 @@ const feeWaiverSchema = new mongoose.Schema({
         ref: 'FeeInstance',
         required: true
     },
-    
+
     // Waiver Details
     type: {
         type: String,
@@ -22,16 +25,16 @@ const feeWaiverSchema = new mongoose.Schema({
         required: true
     },
     amount: {
-        type: Number,
+        type: Decimal128,
         required: true,
         min: 0
     },
     percentage: {
-        type: Number,
+        type: Decimal128,
         min: 0,
         max: 100
     },
-    
+
     // Approval Workflow
     status: {
         type: String,
@@ -45,7 +48,7 @@ const feeWaiverSchema = new mongoose.Schema({
     approvedDate: Date,
     effectiveFrom: Date,
     effectiveUntil: Date,
-    
+
     // Reason & Documentation
     reason: {
         type: String,
@@ -56,7 +59,7 @@ const feeWaiverSchema = new mongoose.Schema({
         url: String,
         uploadedAt: Date
     }],
-    
+
     // Approval Chain
     requestedBy: {
         type: mongoose.Schema.Types.ObjectId,
@@ -70,7 +73,7 @@ const feeWaiverSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User'
     },
-    
+
     // Audit Trail
     remarks: String,
     revisionHistory: [{
@@ -92,11 +95,13 @@ feeWaiverSchema.index({ feeInstance: 1, status: 1 });
 feeWaiverSchema.index({ type: 1, effectiveFrom: 1, effectiveUntil: 1 });
 
 // Pre-save to calculate amount from percentage if needed
-feeWaiverSchema.pre('save', async function(next) {
+feeWaiverSchema.pre('save', async function (next) {
     if (this.percentage && !this.amount) {
         const feeInstance = await mongoose.model('FeeInstance').findById(this.feeInstance);
         if (feeInstance) {
-            this.amount = (feeInstance.netAmount * this.percentage) / 100;
+            // this.amount = (feeInstance.netAmount * this.percentage) / 100;
+            const base = toDecimal(feeInstance.dueAmount || feeInstance.totalAmount);
+            this.amount = toDecimal128(base.times(toDecimal(this.percentage)).div(100));
         }
     }
     next();

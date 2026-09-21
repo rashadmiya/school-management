@@ -251,18 +251,18 @@ const Dashboard = () => {
                                         <div key={payment._id} className={`flex justify-between items-center text-sm p-2 border rounded ${theme.paymentItem}`}>
                                             <div>
                                                 <p className={`font-medium ${isDarkMode ? "text-white" : "text-gray-900"}`}>
-                                                    {payment.student.name}
+                                                    {payment?.student?.name}
                                                 </p>
                                                 <p className={`text-xs ${isDarkMode ? "text-gray-400" : "text-gray-500"}`}>
-                                                    {payment.class.name}
+                                                    {payment?.class?.name}
                                                 </p>
                                             </div>
                                             <div className="text-right">
                                                 <p className={`font-bold ${isDarkMode ? "text-emerald-400" : "text-green-600"}`}>
-                                                    ${payment.paidAmount}
+                                                    ${payment?.paidAmount}
                                                 </p>
                                                 <Badge variant="outline" className={`text-xs ${isDarkMode ? "border-gray-700 text-gray-300" : ""}`}>
-                                                    {payment.status}
+                                                    {payment?.status}
                                                 </Badge>
                                             </div>
                                         </div>

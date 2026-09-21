@@ -1,550 +1,180 @@
-// src/pages/Waivers/ApproveWaivers.jsx
+// src/pages/finance/waivers/ApproveWaivers.jsx
+import { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { Gift, CheckCircle2, XCircle, Clock, ArrowLeft } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
+import { FinancePageHeader, FinanceStatCard, FinanceEmptyState } from '@/components/finance';
+import WaiverApprovalTable from '@/components/finance/waivers/WaiverApprovalTable';
+import WaiverDetailDialog from '@/components/finance/waivers/WaiverDetailDialog';
+import { useFinanceTheme } from '@/hooks/finance/useFinanceTheme';
+import { useFinancePermissions } from '@/hooks/finance/useFinancePermissions';
 import {
-    useApproveWaiverMutation,
     useGetWaiverRequestsQuery,
-    useRejectWaiverMutation
-} from '@/features/apis/finance/waiverApi'
-import { WAIVER_STATUS, WAIVER_TYPES } from '@/utils/constants'
-import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Textarea } from '@/components/ui/textarea'
-import { useToast } from '@/hooks/use-toast'
-import { formatCurrency, formatDate, formatRelativeTime } from '@/lib/formaters'
-import {
-    CheckCircle,
-    ChevronLeft,
-    ChevronRight,
-    Clock,
-    Download,
-    Eye,
-    Filter,
-    Search,
-    User,
-    XCircle
-} from 'lucide-react'
-import { useState } from 'react'
+    useApproveWaiverMutation,
+    useRejectWaiverMutation,
+} from '@/features/apis/finance/waiverApi';
+import { toast } from 'sonner';
+import { MoneyDisplay } from '@/components/finance';
+import { toMoneyNumber } from '@/lib/formaters';
 
-const ApproveWaivers = () => {
-  const [search, setSearch] = useState('')
-  const [status, setStatus] = useState('pending')
-  const [page, setPage] = useState(1)
-  const [selectedWaiver, setSelectedWaiver] = useState(null)
-  const [showDetails, setShowDetails] = useState(false)
-  const [remarks, setRemarks] = useState('')
-  const [rejectionReason, setRejectionReason] = useState('')
+export default function ApproveWaivers() {
+    const theme = useFinanceTheme();
+    const can = useFinancePermissions();
+    const navigate = useNavigate();
 
-  const { toast } = useToast()
-  
-  const { data: waiversData, isLoading, refetch } = useGetWaiverRequestsQuery({
-    status,
-    search: search || undefined,
-    page,
-    limit: 10,
-  })
-  const waivers = waiversData?.data || []
-  const [approveWaiver, { isLoading: isApproving }] = useApproveWaiverMutation()
-  const [rejectWaiver, { isLoading: isRejecting }] = useRejectWaiverMutation()
+    const [selected, setSelected] = useState(null);
+    const [confirmApprove, setConfirmApprove] = useState(null);
+    const [confirmReject, setConfirmReject] = useState(null);
 
-  const handleViewDetails = (waiver) => {
-    setSelectedWaiver(waiver)
-    setShowDetails(true)
-  }
+    const { data, refetch } = useGetWaiverRequestsQuery({ limit: 200 });
+    const waivers = data?.data || [];
+    const pending = waivers.filter((w) => w.status === 'pending');
 
-  const handleApprove = async (waiverId) => {
-    try {
-      await approveWaiver({ id: waiverId, remarks }).unwrap()
-      toast({
-        title: 'Success',
-        description: 'Waiver approved successfully',
-        variant: 'success',
-      })
-      refetch()
-      setRemarks('')
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error.data?.message || 'Failed to approve waiver',
-        variant: 'destructive',
-      })
-    }
-  }
+    const [approveWaiver, { isLoading: approving }] = useApproveWaiverMutation();
+    const [rejectWaiver, { isLoading: rejecting }] = useRejectWaiverMutation();
 
-  const handleReject = async (waiverId) => {
-    if (!rejectionReason) {
-      toast({
-        title: 'Error',
-        description: 'Please provide a reason for rejection',
-        variant: 'destructive',
-      })
-      return
+    const handleApprove = async () => {
+        if (!confirmApprove) return;
+        try {
+            await approveWaiver({ id: confirmApprove._id, remarks: 'Approved' }).unwrap();
+            toast.success('Waiver approved');
+            setConfirmApprove(null);
+            setSelected(null);
+            refetch();
+        } catch (err) {
+            toast.error(err?.data?.message || 'Failed to approve');
+        }
+    };
+
+    const handleReject = async () => {
+        if (!confirmReject) return;
+        const reason = window.prompt('Reason for rejection:');
+        if (!reason) return;
+        try {
+            await rejectWaiver({ id: confirmReject._id, reason }).unwrap();
+            toast.success('Waiver rejected');
+            setConfirmReject(null);
+            setSelected(null);
+            refetch();
+        } catch (err) {
+            toast.error(err?.data?.message || 'Failed to reject');
+        }
+    };
+
+    if (!can.canApproveWaiver) {
+        return (
+            <div className={`p-6 ${theme.text}`}>
+                <Card className={`border shadow-sm ${theme.card}`}>
+                    <FinanceEmptyState
+                        icon={Gift}
+                        title="Access denied"
+                        description="You don't have permission to approve waivers."
+                    />
+                </Card>
+            </div>
+        );
     }
 
-    try {
-      await rejectWaiver({ id: waiverId, reason: rejectionReason }).unwrap()
-      toast({
-        title: 'Success',
-        description: 'Waiver rejected successfully',
-        variant: 'success',
-      })
-      refetch()
-      setRejectionReason('')
-    } catch (error) {
-      toast({
-        title: 'Error',
-        description: error.data?.message || 'Failed to reject waiver',
-        variant: 'destructive',
-      })
-    }
-  }
+    return (
+        <div className={`space-y-6 ${theme.text}`}>
+            <FinancePageHeader
+                title="Approve Waivers"
+                subtitle="Review and approve pending waiver requests."
+                breadcrumb={[
+                    { label: 'Finance', to: '/admin/finance' },
+                    { label: 'Waivers' },
+                    { label: 'Approve' },
+                ]}
+                actions={
+                    <Button
+                        variant="outline"
+                        onClick={() => navigate('/admin/finance/waivers')}
+                        className={theme.outlineBtn}
+                    >
+                        <ArrowLeft className="w-4 h-4 mr-2" />
+                        All Waivers
+                    </Button>
+                }
+            />
 
-  const pendingCount = waivers?.filter(w => w.status === 'pending').length || 0
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+                <FinanceStatCard label="Pending Approval" value={pending.length} icon={Clock} accent="yellow" />
+                <FinanceStatCard
+                    label="Total Pending Amount"
+                    value={<MoneyDisplay value={pending.reduce((s, w) => s + toMoneyNumber(w.amount), 0)} size="xl" tone="positive" />}
+                    icon={Gift}
+                    accent="blue"
+                />
+                <FinanceStatCard
+                    label="Avg. Request"
+                    value={
+                        <MoneyDisplay
+                            value={pending.length > 0
+                                ? pending.reduce((s, w) => s + toMoneyNumber(w.amount), 0) / pending.length
+                                : 0}
+                            size="xl"
+                        />
+                    }
+                    icon={Gift}
+                    accent="purple"
+                />
+            </div>
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Approve Waivers</h1>
-          <p className="text-muted-foreground">
-            Review and approve pending waiver requests
-          </p>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-yellow-100 text-yellow-800">
-            <Clock className="mr-1 h-3 w-3" />
-            {pendingCount} Pending
-          </Badge>
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Export
-          </Button>
-        </div>
-      </div>
+            <WaiverApprovalTable
+                statusFilter="pending"
+                onRowClick={setSelected}
+                title="Pending Approval"
+                emptyMessage={{
+                    title: 'No pending waivers',
+                    description: 'All waiver requests have been reviewed.',
+                }}
+            />
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search by student..."
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </div>
-            <Select value={status} onValueChange={setStatus}>
-              <SelectTrigger>
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                {WAIVER_STATUS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select>
-              <SelectTrigger>
-                <SelectValue placeholder="Waiver Type" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Types</SelectItem>
-                {WAIVER_TYPES.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Button variant="outline" className="flex-1" onClick={() => {
-              setSearch('')
-              setStatus('pending')
-              setPage(1)
-            }}>
-              <Filter className="mr-2 h-4 w-4" />
-              Reset
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
+            <WaiverDetailDialog
+                waiver={selected}
+                open={!!selected}
+                onOpenChange={(o) => !o && setSelected(null)}
+                onApprove={(w) => { setConfirmApprove(w); }}
+                onReject={(w) => { setConfirmReject(w); }}
+            />
 
-      {/* Waivers Table */}
-      <Card>
-        <CardHeader>
-          <div className="flex items-center justify-between">
-            <CardTitle>Waiver Requests</CardTitle>
-            <div className="text-sm text-gray-500">
-              Showing {waivers?.length || 0} requests
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
-          ) : waivers?.length === 0 ? (
-            <div className="text-center py-12">
-              <CheckCircle className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-4 text-lg font-semibold">No waiver requests found</h3>
-              <p className="text-gray-500">All requests have been processed</p>
-            </div>
-          ) : (
-            <>
-              <div className="overflow-x-auto">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Student</TableHead>
-                      <TableHead>Fee Details</TableHead>
-                      <TableHead>Waiver Details</TableHead>
-                      <TableHead>Requested</TableHead>
-                      <TableHead>Status</TableHead>
-                      <TableHead className="text-right">Actions</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {waivers.map((waiver) => (
-                      <TableRow key={waiver._id}>
-                        <TableCell>
-                          <div className="flex items-center space-x-3">
-                            <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                              <User className="h-5 w-5 text-primary" />
+            {/* Approve confirm */}
+            {confirmApprove && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
+                    <Card className={`max-w-md w-full ${theme.dialog}`}>
+                        <CardContent className="p-6 space-y-4">
+                            <div className="flex items-center gap-3">
+                                <div className="w-10 h-10 rounded-full bg-emerald-500/20 flex items-center justify-center">
+                                    <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                                </div>
+                                <h3 className={`text-lg font-semibold ${theme.text}`}>Approve Waiver?</h3>
                             </div>
-                            <div>
-                              <div className="font-medium">{waiver.student?.name}</div>
-                              <div className="text-sm text-gray-500">
-                                Roll: {waiver.student?.rollNumber}
-                              </div>
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <div className="font-medium">{waiver.feeInstance?.feeTemplate?.title}</div>
-                            <div className="text-sm text-gray-500">
-                              Amount: {formatCurrency(waiver.feeInstance?.totalAmount)}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <Badge variant="outline">
-                              {WAIVER_TYPES.find(t => t.value === waiver.type)?.label || waiver.type}
-                            </Badge>
-                            <div className="text-sm font-medium mt-1">
-                              {formatCurrency(waiver.amount)}
-                            </div>
-                            {waiver.percentage && (
-                              <div className="text-xs text-gray-500">
-                                ({waiver.percentage}%)
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="text-sm">
-                            {formatDate(waiver.requestDate)}
-                          </div>
-                          <div className="text-xs text-gray-500">
-                            {formatRelativeTime(waiver.requestDate)}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {waiver.status === 'pending' ? (
-                            <Badge className="bg-yellow-100 text-yellow-800">
-                              <Clock className="mr-1 h-3 w-3" />
-                              Pending
-                            </Badge>
-                          ) : waiver.status === 'approved' ? (
-                            <Badge className="bg-green-100 text-green-800">
-                              <CheckCircle className="mr-1 h-3 w-3" />
-                              Approved
-                            </Badge>
-                          ) : (
-                            <Badge className="bg-red-100 text-red-800">
-                              <XCircle className="mr-1 h-3 w-3" />
-                              Rejected
-                            </Badge>
-                          )}
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <div className="flex items-center justify-end space-x-2">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => handleViewDetails(waiver)}
-                            >
-                              <Eye className="h-4 w-4" />
-                            </Button>
-                            {waiver.status === 'pending' && (
-                              <>
+                            <p className={`text-sm ${theme.textMuted}`}>
+                                This will apply <MoneyDisplay value={confirmApprove.amount} size="sm" tone="positive" className="inline" /> to{' '}
+                                <strong>{confirmApprove.student?.name}</strong>'s fee.
+                            </p>
+                            <div className="flex justify-end gap-2">
                                 <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleApprove(waiver._id)}
-                                  disabled={isApproving}
+                                    variant="outline"
+                                    onClick={() => setConfirmApprove(null)}
+                                    disabled={approving}
+                                    className={theme.outlineBtn}
                                 >
-                                  <CheckCircle className="mr-2 h-4 w-4" />
-                                  Approve
+                                    Cancel
                                 </Button>
                                 <Button
-                                  variant="outline"
-                                  size="sm"
-                                  onClick={() => handleReject(waiver._id)}
-                                  disabled={isRejecting}
+                                    onClick={handleApprove}
+                                    disabled={approving}
+                                    className="bg-emerald-600 hover:bg-emerald-700 text-white"
                                 >
-                                  <XCircle className="mr-2 h-4 w-4" />
-                                  Reject
+                                    {approving ? 'Approving…' : 'Approve'}
                                 </Button>
-                              </>
-                            )}
-                          </div>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
-              </div>
-
-              {/* Pagination */}
-              <div className="flex items-center justify-between mt-6">
-                <div className="text-sm text-gray-500">
-                  Page {page}
-                </div>
-                <div className="flex items-center space-x-2">
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setPage(p => Math.max(1, p - 1))}
-                    disabled={page === 1}
-                  >
-                    <ChevronLeft className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="icon"
-                    onClick={() => setPage(p => p + 1)}
-                    disabled={waivers?.length < 10}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </Button>
-                </div>
-              </div>
-            </>
-          )}
-        </CardContent>
-      </Card>
-
-      {/* Quick Actions for Pending Waivers */}
-      {status === 'pending' && pendingCount > 0 && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Quick Actions</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Approval Remarks (Optional)
-                  </label>
-                  <Textarea
-                    placeholder="Enter remarks for approval..."
-                    rows={3}
-                    value={remarks}
-                    onChange={(e) => setRemarks(e.target.value)}
-                  />
-                </div>
-                <div className="text-sm text-gray-500">
-                  These remarks will be added to all approved waivers
-                </div>
-              </div>
-              <div className="space-y-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">
-                    Rejection Reason (Optional)
-                  </label>
-                  <Textarea
-                    placeholder="Enter reason for rejection..."
-                    rows={3}
-                    value={rejectionReason}
-                    onChange={(e) => setRejectionReason(e.target.value)}
-                  />
-                </div>
-                <div className="text-sm text-gray-500">
-                  Required when rejecting waivers
-                </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Waiver Details Dialog */}
-      <Dialog open={showDetails} onOpenChange={setShowDetails}>
-        <DialogContent className="max-w-3xl">
-          <DialogHeader>
-            <DialogTitle>Waiver Request Details</DialogTitle>
-          </DialogHeader>
-          {selectedWaiver && (
-            <div className="space-y-6">
-              {/* Header */}
-              <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
-                <div>
-                  <div className="text-2xl font-bold text-purple-600">
-                    {formatCurrency(selectedWaiver.amount)}
-                  </div>
-                  <div className="text-sm text-gray-500">
-                    {selectedWaiver.percentage && `(${selectedWaiver.percentage}% of fee)`}
-                  </div>
-                </div>
-                <Badge className={
-                  selectedWaiver.status === 'pending' 
-                    ? 'bg-yellow-100 text-yellow-800'
-                    : selectedWaiver.status === 'approved'
-                    ? 'bg-green-100 text-green-800'
-                    : 'bg-red-100 text-red-800'
-                }>
-                  {selectedWaiver.status}
-                </Badge>
-              </div>
-
-              {/* Student and Fee Info */}
-              <div className="grid grid-cols-2 gap-6">
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Student Information</h4>
-                    <div className="space-y-2">
-                      <div className="flex items-center space-x-3">
-                        <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
-                          <User className="h-5 w-5 text-primary" />
-                        </div>
-                        <div>
-                          <div className="font-medium">{selectedWaiver.student?.name}</div>
-                          <div className="text-sm text-gray-500">
-                            Roll: {selectedWaiver.student?.rollNumber} | Class: {selectedWaiver.student?.class?.name}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Fee Information</h4>
-                    <div className="space-y-2">
-                      <div>
-                        <div className="text-sm text-gray-500">Fee Title</div>
-                        <div className="font-medium">{selectedWaiver.feeInstance?.feeTemplate?.title}</div>
-                      </div>
-                      <div className="grid grid-cols-2 gap-4">
-                        <div>
-                          <div className="text-sm text-gray-500">Total Amount</div>
-                          <div className="font-medium">{formatCurrency(selectedWaiver.feeInstance?.totalAmount)}</div>
-                        </div>
-                        <div>
-                          <div className="text-sm text-gray-500">Already Waived</div>
-                          <div className="font-medium text-blue-600">
-                            {formatCurrency(selectedWaiver.feeInstance?.waivedAmount || 0)}
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="space-y-4">
-                  <div>
-                    <h4 className="font-medium mb-2">Waiver Details</h4>
-                    <div className="space-y-2">
-                      <div>
-                        <div className="text-sm text-gray-500">Type</div>
-                        <Badge variant="outline">
-                          {WAIVER_TYPES.find(t => t.value === selectedWaiver.type)?.label || selectedWaiver.type}
-                        </Badge>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-500">Requested By</div>
-                        <div className="font-medium">{selectedWaiver.requestedBy?.name}</div>
-                      </div>
-                      <div>
-                        <div className="text-sm text-gray-500">Request Date</div>
-                        <div className="font-medium">{formatDate(selectedWaiver.requestDate)}</div>
-                      </div>
-                      {selectedWaiver.approvedDate && (
-                        <div>
-                          <div className="text-sm text-gray-500">Approved Date</div>
-                          <div className="font-medium">{formatDate(selectedWaiver.approvedDate)}</div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  <div>
-                    <h4 className="font-medium mb-2">Reason for Waiver</h4>
-                    <p className="text-gray-600">{selectedWaiver.reason}</p>
-                  </div>
-                </div>
-              </div>
-
-              {/* Supporting Documents */}
-              {selectedWaiver.supportingDocuments?.length > 0 && (
-                <div>
-                  <h4 className="font-medium mb-2">Supporting Documents</h4>
-                  <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                    {selectedWaiver.supportingDocuments.map((doc, index) => (
-                      <div key={index} className="p-3 border rounded-lg">
-                        <div className="flex items-center space-x-3">
-                          <FileText className="h-8 w-8 text-gray-400" />
-                          <div>
-                            <div className="font-medium text-sm">{doc.name}</div>
-                            <div className="text-xs text-gray-500">
-                              Uploaded {formatDate(doc.uploadedAt)}
                             </div>
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                        </CardContent>
+                    </Card>
                 </div>
-              )}
-
-              {/* Action Buttons */}
-              {selectedWaiver.status === 'pending' && (
-                <div className="border-t pt-4">
-                  <div className="flex items-center justify-end space-x-4">
-                    <Button
-                      variant="outline"
-                      onClick={() => handleReject(selectedWaiver._id)}
-                      disabled={isRejecting}
-                    >
-                      <XCircle className="mr-2 h-4 w-4" />
-                      Reject
-                    </Button>
-                    <Button
-                      onClick={() => handleApprove(selectedWaiver._id)}
-                      disabled={isApproving}
-                    >
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Approve
-                    </Button>
-                  </div>
-                </div>
-              )}
-            </div>
-          )}
-        </DialogContent>
-      </Dialog>
-    </div>
-  )
+            )}
+        </div>
+    );
 }
-
-export default ApproveWaivers

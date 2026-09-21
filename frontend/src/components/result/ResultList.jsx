@@ -246,10 +246,10 @@ export default function ResultsList({
                     <TableRow key={result._id}>
                       <TableCell>
                         <div>
-                          <div className="font-medium">{result.student.name}</div>
+                          <div className="font-medium">{result?.student?.name}</div>
                           <div className="text-sm text-gray-500">
-                            Roll: {result.student.rollNumber}
-                            {result.student.class && ` • ${result.student.class.name}`}
+                            Roll: {result?.student?.rollNumber}
+                            {result?.student?.class && ` • ${result.student.class?.name}`}
                           </div>
                         </div>
                       </TableCell>

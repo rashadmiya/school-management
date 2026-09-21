@@ -1,169 +1,130 @@
-// services/WaiverService.js - COMPLETE REWRITE
+// services/WaiverService.js
 const mongoose = require('mongoose');
 const FeeWaiver = require('../financeSystem/models/FeeWaiver');
 const FeeInstance = require('../financeSystem/models/FeeInstance');
-const LedgerService = require('./LedgerService');
+const StudentFinanceSummaryService = require('./StudentFinanceSummaryService');
 const TransactionService = require('./TransactionService');
+const { toDecimal, toDecimal128, percent } = require('../utils/decimal');
+
+const NotificationService = require('../financeSystem/services/NotificationService');
+const Student = require('../models/Student');
 
 class WaiverService {
-    static async requestWaiver(waiverData, userId) {
-        const session = await mongoose.startSession();
-        
-        try {
-            session.startTransaction();
-            
-            const { feeInstanceId, type, amount, percentage, reason, supportingDocuments, effectiveFrom, effectiveUntil } = waiverData;
-            
-            // Get fee instance
-            const feeInstance = await FeeInstance.findById(feeInstanceId).session(session);
-            if (!feeInstance) throw new Error('Fee instance not found');
-            
-            // Calculate waiver amount
-            let waiverAmount = amount;
-            if (percentage) {
-                waiverAmount = (feeInstance.totalAmount * percentage) / 100;
-            }
-            
-            // Validate waiver amount
-            const maxWaivable = feeInstance.totalAmount - feeInstance.waivedAmount;
-            if (waiverAmount > maxWaivable) {
-                throw new Error(`Maximum waivable amount is ${maxWaivable}`);
-            }
-            
-            // Check for existing pending/approved waiver
-            const existingWaiver = await FeeWaiver.findOne({
-                feeInstance: feeInstanceId,
-                status: { $in: ['pending', 'approved'] }
-            }).session(session);
-            
-            if (existingWaiver) {
-                throw new Error('A waiver already exists for this fee instance');
-            }
-            
-            // Create waiver request
-            const waiver = new FeeWaiver({
-                student: feeInstance.student,
-                feeInstance: feeInstanceId,
-                type,
-                amount: waiverAmount,
-                percentage: percentage || null,
-                reason,
-                supportingDocuments: supportingDocuments || [],
-                status: 'pending',
-                requestedBy: userId,
-                requestDate: new Date(),
-                effectiveFrom: effectiveFrom || new Date(),
-                effectiveUntil: effectiveUntil || null
-            });
-            
-            await waiver.save({ session });
-            
-            await session.commitTransaction();
-            
-            return waiver;
-            
-        } catch (error) {
-            await session.abortTransaction();
-            throw error;
-        } finally {
-            session.endSession();
+    static async requestWaiver(data, userId) {
+        const { feeInstanceId, type, amount, percentage, reason, supportingDocuments, effectiveFrom, effectiveUntil } = data;
+        const feeInstance = await FeeInstance.findById(feeInstanceId);
+        if (!feeInstance) throw new Error('Fee instance not found');
+
+        let waiverAmount = toDecimal(amount || 0);
+        // if (percentage) waiverAmount = percent(toDecimal(feeInstance.totalAmount), percentage);
+        if (percentage) {
+            const total = toDecimal(feeInstance.totalAmount);
+            const alreadyWaived = toDecimal(feeInstance.waivedAmount || 0);
+            const maxWaivable = total.minus(alreadyWaived);
+            waiverAmount = maxWaivable.times(percentage).dividedBy(100);
         }
+        const maxWaivable = toDecimal(feeInstance.totalAmount).minus(toDecimal(feeInstance.waivedAmount));
+        if (waiverAmount.gt(maxWaivable)) throw new Error(`Max waivable is ${maxWaivable.toString()}`);
+
+        const existing = await FeeWaiver.findOne({
+            feeInstance: feeInstanceId,
+            status: { $in: ['pending', 'approved'] },
+        });
+        if (existing) throw new Error('A waiver already exists for this fee');
+
+        const [waiver] = await FeeWaiver.create([{
+            student: feeInstance.student,
+            feeInstance: feeInstanceId,
+            type,
+            amount: toDecimal128(waiverAmount),
+            percentage: percentage || null,
+            reason,
+            supportingDocuments: supportingDocuments || [],
+            status: 'pending',
+            requestedBy: userId,
+            requestDate: new Date(),
+            effectiveFrom: effectiveFrom || new Date(),
+            effectiveUntil: effectiveUntil || null,
+        }]);
+
+        return waiver;
     }
 
     static async approveWaiver(waiverId, userId, remarks = '') {
-        const session = await mongoose.startSession();
-        
+        const dbSession = await mongoose.startSession();
         try {
-            session.startTransaction();
-            
-            const transactionId = await TransactionService.createTransactionId('waiver', userId);
-            
-            await TransactionService.beginTransaction(transactionId, 'waiver', {
-                userId,
-                waiverId
-            });
-            
-            // Get waiver
-            const waiver = await FeeWaiver.findById(waiverId).session(session);
+            dbSession.startTransaction();
+
+            const waiver = await FeeWaiver.findById(waiverId).session(dbSession);
             if (!waiver) throw new Error('Waiver not found');
-            
-            if (waiver.status !== 'pending') {
-                throw new Error(`Waiver is already ${waiver.status}`);
-            }
-            
-            // Get fee instance
-            const feeInstance = await FeeInstance.findById(waiver.feeInstance).session(session);
+            if (waiver.status !== 'pending') throw new Error(`Waiver already ${waiver.status}`);
+
+            const feeInstance = await FeeInstance.findById(waiver.feeInstance).session(dbSession);
             if (!feeInstance) throw new Error('Fee instance not found');
-            
-            // Update waiver
+
+            const transactionId = await TransactionService.createTransactionId('waiver', userId);
+            await TransactionService.beginTransaction(transactionId, 'waiver', { userId, waiverId });
+
+            const amount = toDecimal(waiver.amount);
+
             waiver.status = 'approved';
             waiver.approvedBy = userId;
             waiver.approvedDate = new Date();
             waiver.remarks = remarks;
-            
-            // Add to revision history
             waiver.revisionHistory.push({
                 changedBy: userId,
                 changedAt: new Date(),
                 changes: { status: 'approved' },
-                reason: 'Approved waiver'
+                reason: 'Approved',
             });
-            
-            await waiver.save({ session });
-            
-            // Update fee instance
-            const previousWaivedAmount = feeInstance.waivedAmount;
-            feeInstance.waivedAmount += waiver.amount;
+            await waiver.save({ session: dbSession });
+
+            feeInstance.waivedAmount = toDecimal128(toDecimal(feeInstance.waivedAmount).plus(amount));
             feeInstance.waiver = waiver._id;
-            feeInstance.dueAmount = feeInstance.totalAmount - feeInstance.paidAmount - feeInstance.waivedAmount - feeInstance.advanceUsed;
-            
-            // Update status
-            if (feeInstance.dueAmount <= 0) {
-                feeInstance.status = 'waived';
-                feeInstance.paidDate = new Date();
-            } else if (feeInstance.waivedAmount > 0) {
-                feeInstance.status = 'partial';
-            }
-            
-            await feeInstance.save({ session });
-            
-            // Create ledger entry
-            await LedgerService.createEntry({
+            feeInstance.recalculate();
+            await feeInstance.save({ session: dbSession });
+
+            await StudentFinanceSummaryService.recordMovement({
                 student: feeInstance.student,
+                session: feeInstance.session,
                 transactionId,
                 type: 'waiver',
-                credit: waiver.amount,
+                credit: toDecimal128(amount),
                 refModel: 'FeeWaiver',
                 refId: waiver._id,
                 description: `Waiver approved: ${waiver.reason}`,
                 createdBy: userId,
-                session: feeInstance.session
-            }, session);
-            
+                summaryDelta: { waived: amount },
+            }, dbSession);
+
             await TransactionService.completeTransaction(transactionId, {
-                waiverId: waiver._id,
-                amount: waiver.amount,
-                feeInstanceId: feeInstance._id
+                waiverId: waiver._id, amount: amount.toString(),
             });
-            
-            await session.commitTransaction();
-            
-            return {
-                waiver,
-                feeInstance,
-                amountWaived: waiver.amount
-            };
-            
-        } catch (error) {
-            await session.abortTransaction();
-            
-            if (error.transactionId) {
-                await TransactionService.failTransaction(error.transactionId, error);
+
+            await dbSession.commitTransaction();
+            // 🔔 Notify parent
+            try {
+
+                const student = await Student.findById(feeInstance.student)
+                    .populate('parent')
+                    .lean();
+
+                await NotificationService.notifyWaiverApproved({
+                    waiver,
+                    feeInstance,
+                    student,
+                    parent: student?.parent,
+                });
+            } catch (err) {
+                console.error('[waiver] notification failed', err);
             }
-            
-            throw error;
+            return { waiver, feeInstance, amountWaived: amount };
+
+        } catch (e) {
+            await dbSession.abortTransaction();
+            throw e;
         } finally {
-            session.endSession();
+            dbSession.endSession();
         }
     }
 
@@ -179,145 +140,121 @@ class WaiverService {
                         changedBy: userId,
                         changedAt: new Date(),
                         changes: { status: 'rejected' },
-                        reason
-                    }
-                }
+                        reason,
+                    },
+                },
             },
             { new: true }
         );
-        
         if (!waiver) throw new Error('Waiver not found');
-        
+        // 🔔 Notify parent
+        try {
+            const NotificationService = require('./NotificationService');
+            const Student = require('../models/Student');
+            const FeeInstance = require('../financeSystem/models/FeeInstance');
+
+            const fee = await FeeInstance.findById(waiver.feeInstance).lean();
+            const student = await Student.findById(waiver.student)
+                .populate('parent')
+                .lean();
+
+            await NotificationService.notifyWaiverRejected({
+                waiver,
+                student,
+                parent: student?.parent,
+                reason,
+            });
+        } catch (err) {
+            console.error('[waiver] reject notification failed', err);
+        }
+
         return waiver;
     }
 
     static async revokeWaiver(waiverId, userId, reason) {
-        const session = await mongoose.startSession();
-        
+        const dbSession = await mongoose.startSession();
         try {
-            session.startTransaction();
-            
-            const transactionId = await TransactionService.createTransactionId('waiver_revocation', userId);
-            
-            await TransactionService.beginTransaction(transactionId, 'waiver_revocation', {
-                userId,
-                waiverId
-            });
-            
-            // Get waiver
-            const waiver = await FeeWaiver.findById(waiverId).session(session);
+            dbSession.startTransaction();
+
+            const waiver = await FeeWaiver.findById(waiverId).session(dbSession);
             if (!waiver) throw new Error('Waiver not found');
-            
-            if (waiver.status !== 'approved') {
-                throw new Error('Only approved waivers can be revoked');
-            }
-            
-            // Get fee instance
-            const feeInstance = await FeeInstance.findById(waiver.feeInstance).session(session);
+            if (waiver.status !== 'approved') throw new Error('Only approved waivers can be revoked');
+
+            const feeInstance = await FeeInstance.findById(waiver.feeInstance).session(dbSession);
             if (!feeInstance) throw new Error('Fee instance not found');
-            
-            // Update waiver
+
+            const transactionId = await TransactionService.createTransactionId('waiver_revocation', userId);
+            await TransactionService.beginTransaction(transactionId, 'waiver_revocation', { userId, waiverId });
+
+            const amount = toDecimal(waiver.amount);
+
             waiver.status = 'revoked';
             waiver.remarks = reason;
-            
             waiver.revisionHistory.push({
-                changedBy: userId,
-                changedAt: new Date(),
-                changes: { status: 'revoked' },
-                reason
+                changedBy: userId, changedAt: new Date(),
+                changes: { status: 'revoked' }, reason,
             });
-            
-            await waiver.save({ session });
-            
-            // Update fee instance (reverse the waiver)
-            feeInstance.waivedAmount -= waiver.amount;
-            feeInstance.dueAmount = feeInstance.totalAmount - feeInstance.paidAmount - feeInstance.waivedAmount - feeInstance.advanceUsed;
+            await waiver.save({ session: dbSession });
+
+            feeInstance.waivedAmount = toDecimal128(toDecimal(feeInstance.waivedAmount).minus(amount));
             feeInstance.waiver = null;
-            
-            // Update status
-            if (feeInstance.dueAmount > 0) {
-                if (feeInstance.paidAmount > 0) {
-                    feeInstance.status = 'partial';
-                } else {
-                    feeInstance.status = 'unpaid';
-                }
-            }
-            
-            await feeInstance.save({ session });
-            
-            // Create reversal ledger entry
-            await LedgerService.createEntry({
+            feeInstance.recalculate();
+            await feeInstance.save({ session: dbSession });
+
+            await StudentFinanceSummaryService.recordMovement({
                 student: feeInstance.student,
+                session: feeInstance.session,
                 transactionId,
                 type: 'waiver',
-                debit: waiver.amount, // Debit to reverse the credit
+                debit: toDecimal128(amount),
                 refModel: 'FeeWaiver',
                 refId: waiver._id,
                 description: `Waiver revoked: ${reason}`,
                 createdBy: userId,
-                session: feeInstance.session,
-                isReversal: true
-            }, session);
-            
+                summaryDelta: { waived: amount.negated() },
+            }, dbSession);
+
             await TransactionService.completeTransaction(transactionId, {
-                waiverId: waiver._id,
-                amountReversed: waiver.amount,
-                feeInstanceId: feeInstance._id
+                waiverId: waiver._id, amountReversed: amount.toString(),
             });
-            
-            await session.commitTransaction();
-            
-            return {
-                waiver,
-                feeInstance,
-                amountReversed: waiver.amount
-            };
-            
-        } catch (error) {
-            await session.abortTransaction();
-            
-            if (error.transactionId) {
-                await TransactionService.failTransaction(error.transactionId, error);
-            }
-            
-            throw error;
+
+            await dbSession.commitTransaction();
+            return { waiver, feeInstance, amountReversed: amount };
+
+        } catch (e) {
+            await dbSession.abortTransaction();
+            throw e;
         } finally {
-            session.endSession();
+            dbSession.endSession();
         }
     }
 
     static async getWaiverRequests(studentId = null, status = null, limit = 50) {
-        const query = {};
-        
-        if (studentId) {
-            query.student = studentId;
-        }
-        
-        if (status) {
-            query.status = status;
-        }
-        
-        return FeeWaiver.find(query)
+        const q = {};
+        if (studentId) q.student = studentId;
+        if (status) q.status = status;
+        return FeeWaiver.find(q)
             .sort({ requestDate: -1 })
             .limit(limit)
             .populate('student', 'name rollNumber')
-            .populate('feeInstance', 'totalAmount dueAmount status')
+            .populate('feeInstance', 'title totalAmount dueAmount status')
             .populate('requestedBy', 'name email')
             .populate('approvedBy', 'name email')
             .lean();
     }
 
     static async calculateEligibleWaiver(feeInstanceId) {
-        const feeInstance = await FeeInstance.findById(feeInstanceId);
-        if (!feeInstance) throw new Error('Fee instance not found');
-        
+        const f = await FeeInstance.findById(feeInstanceId);
+        if (!f) throw new Error('Fee instance not found');
+        const total = toDecimal(f.totalAmount);
+        const waived = toDecimal(f.waivedAmount);
         return {
             feeInstanceId,
-            totalAmount: feeInstance.totalAmount,
-            alreadyWaived: feeInstance.waivedAmount,
-            maxWaivable: feeInstance.totalAmount - feeInstance.waivedAmount,
-            paidAmount: feeInstance.paidAmount,
-            dueAmount: feeInstance.dueAmount
+            totalAmount: total.toString(),
+            alreadyWaived: waived.toString(),
+            maxWaivable: total.minus(waived).toString(),
+            paidAmount: toDecimal(f.paidAmount).toString(),
+            dueAmount: toDecimal(f.dueAmount).toString(),
         };
     }
 }

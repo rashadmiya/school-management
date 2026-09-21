@@ -61,29 +61,3 @@ class LedgerController {
 }
 
 module.exports = LedgerController;
-
-// const LedgerEntry = require("../models/LedgerEntry");
-
-// class LedgerController {
-
-//   // GET /api/ledger/:studentId
-//   static async getStudentLedger(req, res) {
-//     try {
-//       const entries = await LedgerEntry.find({
-//         student: req.params.studentId
-//       }).sort({ createdAt: 1 });
-
-//       res.json({
-//         success: true,
-//         data: entries
-//       });
-//     } catch (err) {
-//       res.status(400).json({
-//         success: false,
-//         message: err.message
-//       });
-//     }
-//   }
-// }
-
-// module.exports = LedgerController;

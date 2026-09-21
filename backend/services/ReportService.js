@@ -342,42 +342,313 @@ class ReportService {
     }
 
     //🎢🎨🕶️ dashboard methods can be added here as needed
-    static async getDashboardData(session = null) {
-        const currentSession = session || this.getCurrentSession();
+    // financeSystem/services/ReportService.js — add this method
 
-        // Run all queries in parallel for better performance
+    static async getDashboardData(session) {
+        const Payment = require('../financeSystem/models/Payment');
+        const Refund = require('../financeSystem/models/Refund');
+        const FeeWaiver = require('../financeSystem/models/FeeWaiver');
+        const FeeInstance = require('../financeSystem/models/FeeInstance');
+        const StudentFinanceSummary = require('../financeSystem/models/StudentFinanceSummary');
+        const Student = require('../models/Student');
+        const { getCurrentSession } = require('../utils/accademicSession');
+        const { toDecimal, toString, sum, sub } = require('../utils/decimal');
+
+        const sess = session || getCurrentSession();
+
+        const now = new Date();
+        const startOfToday = new Date(now); startOfToday.setHours(0, 0, 0, 0);
+        const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+        const startOfYear = new Date(now.getFullYear(), 0, 1);
+
+        // KPIs — parallel queries
         const [
-            studentStats,
-            paymentStats,
-            outstandingStats,
+            totalStudents,
+            activeStudents,
+            paymentAgg,
+            todayPayments,
+            monthPayments,
+            yearPayments,
+            refundAgg,
+            waiverAgg,
+            advanceAgg,
+            classWise,
             recentPayments,
-            pendingActions
+            recentRefunds,
+            recentWaivers,
+            overdueCount,
+            agingAgg,
+            topDebtors,
         ] = await Promise.all([
-            this.getStudentStatistics(currentSession),
-            this.getPaymentStatistics(currentSession),
-            this.getOutstandingStatistics(currentSession),
-            this.getRecentPayments(currentSession),
-            this.getPendingActions()
+            Student.countDocuments({ session: sess }),
+            Student.countDocuments({ session: sess /* + isActive if applicable */ }),
+            Payment.aggregate([
+                { $match: { session: sess, status: 'completed' } },
+                { $group: { _id: null, total: { $sum: '$amount' }, count: { $sum: 1 } } },
+            ]),
+            Payment.aggregate([
+                { $match: { session: sess, status: 'completed', createdAt: { $gte: startOfToday } } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            Payment.aggregate([
+                { $match: { session: sess, status: 'completed', createdAt: { $gte: startOfMonth } } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            Payment.aggregate([
+                { $match: { session: sess, status: 'completed', createdAt: { $gte: startOfYear } } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            Refund.aggregate([
+                { $match: { session: sess, status: 'processed' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            FeeWaiver.aggregate([
+                { $match: { status: 'approved' } },
+                { $group: { _id: null, total: { $sum: '$amount' } } },
+            ]),
+            StudentFinanceSummary.aggregate([
+                { $match: { session: sess } },
+                { $group: { _id: null, total: { $sum: '$advanceBalance' } } },
+            ]),
+            FeeInstance.aggregate([
+                { $match: { session: sess, isActive: true } },
+                {
+                    $lookup: {
+                        from: 'classes',
+                        localField: 'class',
+                        foreignField: '_id',
+                        as: 'classInfo',
+                    },
+                },
+                { $unwind: { path: '$classInfo', preserveNullAndEmptyArrays: true } },
+                {
+                    $group: {
+                        _id: '$classInfo._id',
+                        className: { $first: '$classInfo.name' },
+                        totalFee: { $sum: '$totalAmount' },
+                        totalPaid: { $sum: '$paidAmount' },
+                        totalDue: { $sum: '$dueAmount' },
+                    },
+                },
+                { $sort: { totalDue: -1 } },
+                { $limit: 10 },
+            ]),
+            Payment.find({ session: sess, status: 'completed' })
+                .sort({ createdAt: -1 })
+                .limit(8)
+                .populate({ path: 'student', select: 'name rollNumber class', populate: { path: 'class', select: 'name section' } })
+                .populate('receivedBy', 'name')
+                .lean(),
+            Refund.find({ session: sess, status: 'processed' })
+                .sort({ processedAt: -1 })
+                .limit(5)
+                .populate('student', 'name rollNumber')
+                .lean(),
+            FeeWaiver.find({ status: 'approved' })
+                .sort({ approvedDate: -1 })
+                .limit(5)
+                .populate('student', 'name rollNumber')
+                .lean(),
+            FeeInstance.countDocuments({
+                session: sess,
+                isActive: true,
+                status: { $in: ['unpaid', 'partial', 'overdue'] },
+                dueDate: { $lt: now },
+            }),
+            // Aging buckets via aggregation
+            FeeInstance.aggregate([
+                {
+                    $match: {
+                        session: sess,
+                        isActive: true,
+                        status: { $in: ['unpaid', 'partial', 'overdue'] },
+                        dueAmount: { $gt: 0 },
+                    },
+                },
+                {
+                    $bucket: {
+                        groupBy: {
+                            $divide: [{ $subtract: [now, '$dueDate'] }, 1000 * 60 * 60 * 24],
+                        },
+                        boundaries: [-10000, 0, 31, 61, 91, 10000],
+                        default: '90+',
+                        output: { total: { $sum: '$dueAmount' } },
+                    },
+                },
+            ]),
+            FeeInstance.aggregate([
+                {
+                    $match: {
+                        session: sess,
+                        isActive: true,
+                        status: { $in: ['unpaid', 'partial', 'overdue'] },
+                        dueAmount: { $gt: 0 },
+                    },
+                },
+                {
+                    $group: {
+                        _id: '$student',
+                        total: { $sum: '$dueAmount' },
+                    },
+                },
+                { $sort: { total: -1 } },
+                { $limit: 5 },
+                {
+                    $lookup: {
+                        from: 'students',
+                        localField: '_id',
+                        foreignField: '_id',
+                        as: 'student',
+                    },
+                },
+                { $unwind: '$student' },
+            ]),
         ]);
 
+        const totalCollection = toDecimal(paymentAgg[0]?.total || 0);
+        // const totalFeesGenerated = toDecimal(
+        //     (await FeeInstance.aggregate([
+        //         { $match: { session: sess, isActive: true } },
+        //         { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+        //     ]))[0]?.total || 0
+        // );
+        const totalFeesGeneratedStr = toString(
+            (await FeeInstance.aggregate([
+                { $match: { session: sess, isActive: true } },
+                { $group: { _id: null, total: { $sum: '$totalAmount' } } },
+            ]))[0]?.total || 0
+        );
+        const totalFeesGenerated = toDecimal(totalFeesGeneratedStr);
+
+        const collectionRate = totalFeesGenerated.gt(0)
+            ? totalCollection.dividedBy(totalFeesGenerated).times(100).toNumber()
+            : 0;
+
+        // const outstanding = toDecimal(
+        //     (await FeeInstance.aggregate([
+        //         { $match: { session: sess, isActive: true } },
+        //         { $group: { _id: null, total: { $sum: '$dueAmount' } } },
+        //     ]))[0]?.total || 0
+        // );
+
+        const outstandingStr = toString(
+            (await FeeInstance.aggregate([
+                { $match: { session: sess, isActive: true } },
+                { $group: { _id: null, total: { $sum: '$dueAmount' } } },
+            ]))[0]?.total || 0
+        );
+        const outstanding = toDecimal(outstandingStr);
+
+
+        // Build aging buckets
+        const aging = { '0-30': '0.00', '31-60': '0.00', '61-90': '0.00', '90+': '0.00' };
+        for (const bucket of agingAgg) {
+            if (bucket._id === -10000 || bucket._id === 0) aging['0-30'] = toString(bucket.total);
+            else if (bucket._id === 31) aging['31-60'] = toString(bucket.total);
+            else if (bucket._id === 61) aging['61-90'] = toString(bucket.total);
+            else if (bucket._id === 91 || bucket._id === '90+') aging['90+'] = toString(bucket.total);
+        }
+
         return {
-            totalStudents: studentStats.total,
-            activeStudents: studentStats.active,
-            totalCollection: paymentStats.totalAmount,
-            outstandingAmount: outstandingStats.total,
-            collectionRate: paymentStats.totalAmount > 0
-                ? Math.round((paymentStats.totalAmount / (paymentStats.totalAmount + outstandingStats.total)) * 100)
-                : 0,
-            pendingActions: pendingActions.total,
-            recentPayments,
-            quickActions: [
-                { label: 'Receive Payment', description: 'Record new payment', path: '/finance/payments/receive' },
-                { label: 'Apply Fees', description: 'Apply fee template to students', path: '/finance/fees/apply' },
-                { label: 'Process Refund', description: 'Handle refund request', path: '/finance/refunds' },
-                { label: 'Generate Report', description: 'Collection/Outstanding report', path: '/finance/reports/collection' },
-            ],
-            alerts: await this.getSystemAlerts()
+            session: sess,
+            generatedAt: now.toISOString(),
+            kpis: {
+                totalStudents,
+                activeStudents,
+                totalCollection: toString(totalCollection),
+                outstandingAmount: toString(outstanding),
+                collectionRate: Math.round(collectionRate * 10) / 10,
+                todayCollection: toString(todayPayments[0]?.total || 0),
+                monthCollection: toString(monthPayments[0]?.total || 0),
+                yearCollection: toString(yearPayments[0]?.total || 0),
+                advanceBalanceTotal: toString(advanceAgg[0]?.total || 0),
+                refundedTotal: toString(refundAgg[0]?.total || 0),
+                waivedTotal: toString(waiverAgg[0]?.total || 0),
+                overdueCount,
+                totalTransactions: paymentAgg[0]?.count || 0,
+            },
+            alerts: await this._buildAlerts(sess, overdueCount),
+            recentPayments: recentPayments.map(p => ({
+                _id: p._id,
+                receiptNumber: p.receiptNumber,
+                student: {
+                    _id: p.student?._id,
+                    name: p.student?.name,
+                    rollNumber: p.student?.rollNumber,
+                    class: p.student?.class?.name,
+                    section: p.student?.class?.section,
+                },
+                amount: toString(p.amount),
+                method: p.method,
+                receivedBy: p.receivedBy?.name,
+                createdAt: p.createdAt,
+            })),
+            recentRefunds: recentRefunds.map(r => ({
+                _id: r._id, refundNumber: r.refundNumber, student: r.student?.name,
+                amount: toString(r.amount), processedAt: r.processedAt,
+            })),
+            recentWaivers: recentWaivers.map(w => ({
+                _id: w._id, student: w.student?.name,
+                amount: toString(w.amount), approvedDate: w.approvedDate,
+            })),
+            aging,
+            topDebtors: topDebtors.map(d => ({
+                studentId: d._id,
+                name: d.student?.name,
+                rollNumber: d.student?.rollNumber,
+                total: toString(d.total),
+            })),
+            // classWise: classWise.map(c => ({
+            //     classId: c._id,
+            //     className: c.className || 'Unassigned',
+            //     totalFee: toString(c.totalFee),
+            //     totalPaid: toString(c.totalPaid),
+            //     totalDue: toString(c.totalDue),
+            //     collectionRate: c.totalFee > 0
+            //         ? Math.round((toDecimal(c.totalPaid).dividedBy(c.totalFee).times(100)).toNumber() * 10) / 10
+            //         : 0,
+            // })),
+            classWise: classWise.map(c => {
+                // Mongo's $sum over Decimal128 returns Decimal128 objects.
+                // Coerce to string BEFORE handing to toDecimal or Number.
+                const feeStr = toString(c.totalFee);
+                const paidStr = toString(c.totalPaid);
+                const dueStr = toString(c.totalDue);
+
+                const feeNum = Number(feeStr);
+                const paidNum = Number(paidStr);
+
+                const rate =
+                    feeNum > 0
+                        ? Math.round((paidNum / feeNum) * 1000) / 10
+                        : 0;
+
+                return {
+                    classId: c._id,
+                    className: c.className || 'Unassigned',
+                    totalFee: feeStr,
+                    totalPaid: paidStr,
+                    totalDue: dueStr,
+                    collectionRate: rate,
+                };
+            }),
         };
+    }
+
+    static async _buildAlerts(session, overdueCount) {
+        const alerts = [];
+        if (overdueCount > 0) {
+            alerts.push({
+                type: 'error',
+                title: `${overdueCount} overdue fees`,
+                message: `${overdueCount} fee instances are past their due date and unpaid.`,
+            });
+        }
+        // Add more if needed:
+        // - low collection class
+        // - high advance balance
+        // - pending waivers
+        return alerts;
     }
 
     static getCurrentSession() {
@@ -545,787 +816,3 @@ class ReportService {
 }
 
 module.exports = ReportService;
-
-// // services/ReportService.js
-// const mongoose = require('mongoose');
-// const Payment = require('../financeSystem/models/Payment');
-// const FeeInstance = require('../financeSystem/models/FeeInstance');
-// const Student = require('../models/Student');
-// const Class = require('../models/Class');
-
-// class ReportService {
-//     static getCurrentSession() {
-//         const currentYear = new Date().getFullYear();
-//         return `${currentYear}-${currentYear + 1}`;
-//     }
-
-//     // 1. Payment Collection Report
-//     static async getPaymentCollectionReport(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = null,
-//             endDate = null,
-//             method = null,
-//             classId = null,
-//             limit = 50,
-//             page = 1
-//         } = filters;
-
-//         const query = {
-//             session,
-//             status: 'completed'
-//         };
-
-//         // Date filter
-//         if (startDate || endDate) {
-//             query.createdAt = {};
-//             if (startDate) {
-//                 startDate.setHours(0, 0, 0, 0);
-//                 query.createdAt.$gte = startDate;
-//             }
-//             if (endDate) {
-//                 endDate.setHours(23, 59, 59, 999);
-//                 query.createdAt.$lte = endDate;
-//             }
-//         }
-
-//         // Method filter
-//         if (method) {
-//             query.method = method;
-//         }
-
-//         // Class filter - get students in the class
-//         if (classId) {
-//             const students = await Student.find({ class: classId }).select('_id');
-//             const studentIds = students.map(s => s._id);
-//             query.student = { $in: studentIds };
-//         }
-
-//         const skip = (page - 1) * limit;
-
-//         // Get total count
-//         const total = await Payment.countDocuments(query);
-
-//         // Get payments with student details
-//         const payments = await Payment.find(query)
-//             .sort({ createdAt: -1 })
-//             .skip(skip)
-//             .limit(limit)
-//             .populate('student', 'name rollNumber class')
-//             .populate('receivedBy', 'name email')
-//             .lean();
-
-//         // Get aggregation for summary
-//         const summary = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: null,
-//                     totalAmount: { $sum: '$amount' },
-//                     totalTransactions: { $sum: 1 },
-//                     averageAmount: { $avg: '$amount' }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     totalAmount: 1,
-//                     totalTransactions: 1,
-//                     averageAmount: { $round: ['$averageAmount', 2] }
-//                 }
-//             }
-//         ]);
-
-//         return {
-//             payments,
-//             summary: summary[0] || {
-//                 totalAmount: 0,
-//                 totalTransactions: 0,
-//                 averageAmount: 0
-//             },
-//             pagination: {
-//                 page,
-//                 limit,
-//                 total,
-//                 pages: Math.ceil(total / limit)
-//             }
-//         };
-//     }
-
-//     // 2. Fee Collection Report
-//     static async getFeeCollectionReport(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = null,
-//             endDate = null,
-//             classId = null
-//         } = filters;
-
-//         const query = {
-//             session,
-//             isActive: true
-//         };
-
-//         // Date filter for fee instances (based on issue date)
-//         if (startDate || endDate) {
-//             query.issueDate = {};
-//             if (startDate) {
-//                 startDate.setHours(0, 0, 0, 0);
-//                 query.issueDate.$gte = startDate;
-//             }
-//             if (endDate) {
-//                 endDate.setHours(23, 59, 59, 999);
-//                 query.issueDate.$lte = endDate;
-//             }
-//         }
-
-//         // Class filter
-//         if (classId) {
-//             const students = await Student.find({ class: classId }).select('_id');
-//             const studentIds = students.map(s => s._id);
-//             query.student = { $in: studentIds };
-//         }
-
-//         // Aggregate fee data
-//         const feeData = await FeeInstance.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: null,
-//                     totalGenerated: { $sum: '$totalAmount' },
-//                     totalPaid: { $sum: '$paidAmount' },
-//                     totalDue: { $sum: '$dueAmount' },
-//                     totalWaived: { $sum: '$waivedAmount' },
-//                     totalAdvanceUsed: { $sum: '$advanceUsed' },
-//                     count: { $sum: 1 },
-//                     paidCount: {
-//                         $sum: {
-//                             $cond: [{ $eq: ['$status', 'paid'] }, 1, 0]
-//                         }
-//                     },
-//                     unpaidCount: {
-//                         $sum: {
-//                             $cond: [
-//                                 { $in: ['$status', ['unpaid', 'partial', 'overdue']] },
-//                                 1,
-//                                 0
-//                             ]
-//                         }
-//                     }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     totalGenerated: 1,
-//                     totalPaid: 1,
-//                     totalDue: 1,
-//                     totalWaived: 1,
-//                     totalAdvanceUsed: 1,
-//                     count: 1,
-//                     paidCount: 1,
-//                     unpaidCount: 1,
-//                     collectionRate: {
-//                         $multiply: [
-//                             {
-//                                 $divide: [
-//                                     { $sum: ['$totalPaid', '$totalAdvanceUsed'] },
-//                                     { $subtract: ['$totalGenerated', '$totalWaived'] }
-//                                 ]
-//                             },
-//                             100
-//                         ]
-//                     }
-//                 }
-//             }
-//         ]);
-
-//         // Get fee distribution by status
-//         const statusDistribution = await FeeInstance.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: '$status',
-//                     count: { $sum: 1 },
-//                     totalAmount: { $sum: '$totalAmount' },
-//                     paidAmount: { $sum: '$paidAmount' },
-//                     dueAmount: { $sum: '$dueAmount' }
-//                 }
-//             },
-//             { $sort: { count: -1 } }
-//         ]);
-
-//         return {
-//             summary: feeData[0] || {
-//                 totalGenerated: 0,
-//                 totalPaid: 0,
-//                 totalDue: 0,
-//                 totalWaived: 0,
-//                 totalAdvanceUsed: 0,
-//                 count: 0,
-//                 paidCount: 0,
-//                 unpaidCount: 0,
-//                 collectionRate: 0
-//             },
-//             statusDistribution,
-//             filters: {
-//                 session,
-//                 startDate,
-//                 endDate,
-//                 classId
-//             }
-//         };
-//     }
-
-//     // 3. Daily Collection Summary
-//     static async getDailyCollectionSummary(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = new Date(new Date().setMonth(new Date().getMonth() - 1)), // Last 30 days
-//             endDate = new Date()
-//         } = filters;
-
-//         const query = {
-//             session,
-//             status: 'completed',
-//             createdAt: {
-//                 $gte: startDate,
-//                 $lte: endDate
-//             }
-//         };
-
-//         // Group by day
-//         const dailySummary = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: {
-//                         year: { $year: '$createdAt' },
-//                         month: { $month: '$createdAt' },
-//                         day: { $dayOfMonth: '$createdAt' }
-//                     },
-//                     date: { $first: '$createdAt' },
-//                     totalAmount: { $sum: '$amount' },
-//                     transactionCount: { $sum: 1 },
-//                     averageAmount: { $avg: '$amount' }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     date: {
-//                         $dateFromParts: {
-//                             year: '$_id.year',
-//                             month: '$_id.month',
-//                             day: '$_id.day'
-//                         }
-//                     },
-//                     totalAmount: 1,
-//                     transactionCount: 1,
-//                     averageAmount: { $round: ['$averageAmount', 2] }
-//                 }
-//             },
-//             { $sort: { date: 1 } }
-//         ]);
-
-//         // Calculate overall statistics
-//         const overall = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: null,
-//                     totalAmount: { $sum: '$amount' },
-//                     totalTransactions: { $sum: 1 },
-//                     averageDaily: {
-//                         $avg: {
-//                             $let: {
-//                                 vars: {
-//                                     daysDiff: {
-//                                         $divide: [
-//                                             { $subtract: [endDate, startDate] },
-//                                             1000 * 60 * 60 * 24
-//                                         ]
-//                                     }
-//                                 },
-//                                 in: { $divide: ['$amount', '$$daysDiff'] }
-//                             }
-//                         }
-//                     }
-//                 }
-//             }
-//         ]);
-
-//         return {
-//             dailySummary,
-//             overall: overall[0] || {
-//                 totalAmount: 0,
-//                 totalTransactions: 0,
-//                 averageDaily: 0
-//             },
-//             period: {
-//                 startDate,
-//                 endDate,
-//                 days: Math.ceil((endDate - startDate) / (1000 * 60 * 60 * 24))
-//             }
-//         };
-//     }
-
-//     // 4. Monthly Collection Summary
-//     static async getMonthlyCollectionSummary(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             year = new Date().getFullYear()
-//         } = filters;
-
-//         const startOfYear = new Date(year, 0, 1);
-//         const endOfYear = new Date(year, 11, 31, 23, 59, 59, 999);
-
-//         const query = {
-//             session,
-//             status: 'completed',
-//             createdAt: {
-//                 $gte: startOfYear,
-//                 $lte: endOfYear
-//             }
-//         };
-
-//         const monthlySummary = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: { month: { $month: '$createdAt' } },
-//                     month: { $first: { $month: '$createdAt' } },
-//                     totalAmount: { $sum: '$amount' },
-//                     transactionCount: { $sum: 1 },
-//                     averageAmount: { $avg: '$amount' }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     month: 1,
-//                     monthName: {
-//                         $let: {
-//                             vars: {
-//                                 months: [
-//                                     'January', 'February', 'March', 'April', 'May', 'June',
-//                                     'July', 'August', 'September', 'October', 'November', 'December'
-//                                 ]
-//                             },
-//                             in: {
-//                                 $arrayElemAt: ['$$months', { $subtract: ['$month', 1] }]
-//                             }
-//                         }
-//                     },
-//                     totalAmount: 1,
-//                     transactionCount: 1,
-//                     averageAmount: { $round: ['$averageAmount', 2] }
-//                 }
-//             },
-//             { $sort: { month: 1 } }
-//         ]);
-
-//         // Fill in missing months with zero values
-//         const allMonths = Array.from({ length: 12 }, (_, i) => i + 1);
-//         const monthsMap = monthlySummary.reduce((map, item) => {
-//             map[item.month] = item;
-//             return map;
-//         }, {});
-
-//         const completeMonthlySummary = allMonths.map(month => {
-//             if (monthsMap[month]) {
-//                 return monthsMap[month];
-//             }
-//             return {
-//                 month,
-//                 monthName: new Date(year, month - 1).toLocaleString('default', { month: 'long' }),
-//                 totalAmount: 0,
-//                 transactionCount: 0,
-//                 averageAmount: 0
-//             };
-//         });
-
-//         const yearlyTotal = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: null,
-//                     totalAmount: { $sum: '$amount' },
-//                     totalTransactions: { $sum: 1 }
-//                 }
-//             }
-//         ]);
-
-//         return {
-//             monthlySummary: completeMonthlySummary,
-//             yearlyTotal: yearlyTotal[0] || {
-//                 totalAmount: 0,
-//                 totalTransactions: 0
-//             },
-//             year
-//         };
-//     }
-
-//     // 5. Collection by Method
-//     static async getCollectionByMethod(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = null,
-//             endDate = null
-//         } = filters;
-
-//         const query = {
-//             session,
-//             status: 'completed'
-//         };
-
-//         if (startDate || endDate) {
-//             query.createdAt = {};
-//             if (startDate) query.createdAt.$gte = new Date(startDate);
-//             if (endDate) query.createdAt.$lte = new Date(endDate);
-//         }
-
-//         const methodSummary = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: '$method',
-//                     method: { $first: '$method' },
-//                     totalAmount: { $sum: '$amount' },
-//                     transactionCount: { $sum: 1 },
-//                     averageAmount: { $avg: '$amount' }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     method: 1,
-//                     totalAmount: 1,
-//                     transactionCount: 1,
-//                     averageAmount: { $round: ['$averageAmount', 2] }
-//                 }
-//             },
-//             { $sort: { totalAmount: -1 } }
-//         ]);
-
-//         // Calculate percentages
-//         const totalAmount = methodSummary.reduce((sum, item) => sum + item.totalAmount, 0);
-
-//         const methodSummaryWithPercentage = methodSummary.map(item => ({
-//             ...item,
-//             percentage: totalAmount > 0 ? (item.totalAmount / totalAmount) * 100 : 0
-//         }));
-
-//         return {
-//             byMethod: methodSummaryWithPercentage,
-//             totalAmount,
-//             totalTransactions: methodSummary.reduce((sum, item) => sum + item.transactionCount, 0),
-//             period: {
-//                 startDate,
-//                 endDate
-//             }
-//         };
-//     }
-
-//     // 6. Top Contributing Students
-//     static async getTopContributingStudents(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = null,
-//             endDate = null,
-//             limit = 10
-//         } = filters;
-
-//         const query = {
-//             session,
-//             status: 'completed'
-//         };
-
-//         if (startDate || endDate) {
-//             query.createdAt = {};
-//             if (startDate) query.createdAt.$gte = new Date(startDate);
-//             if (endDate) query.createdAt.$lte = new Date(endDate);
-//         }
-
-//         const topStudents = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $group: {
-//                     _id: '$student',
-//                     totalAmount: { $sum: '$amount' },
-//                     paymentCount: { $sum: 1 },
-//                     averagePayment: { $avg: '$amount' },
-//                     lastPayment: { $max: '$createdAt' }
-//                 }
-//             },
-//             { $sort: { totalAmount: -1 } },
-//             { $limit: limit },
-//             {
-//                 $lookup: {
-//                     from: 'students',
-//                     localField: '_id',
-//                     foreignField: '_id',
-//                     as: 'studentInfo'
-//                 }
-//             },
-//             { $unwind: '$studentInfo' },
-//             {
-//                 $lookup: {
-//                     from: 'classes',
-//                     localField: 'studentInfo.class',
-//                     foreignField: '_id',
-//                     as: 'classInfo'
-//                 }
-//             },
-//             { $unwind: { path: '$classInfo', preserveNullAndEmptyArrays: true } },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     studentId: '$_id',
-//                     studentName: '$studentInfo.name',
-//                     rollNumber: '$studentInfo.rollNumber',
-//                     className: '$classInfo.name',
-//                     totalAmount: 1,
-//                     paymentCount: 1,
-//                     averagePayment: { $round: ['$averagePayment', 2] },
-//                     lastPayment: 1
-//                 }
-//             }
-//         ]);
-
-//         return {
-//             topStudents,
-//             limit,
-//             period: {
-//                 startDate,
-//                 endDate
-//             }
-//         };
-//     }
-
-//     // 7. Export to CSV/Excel (Helper method)
-//     static async exportCollectionReport(filters = {}, format = 'csv') {
-//         const report = await this.getPaymentCollectionReport(filters);
-
-//         // Convert to CSV format
-//         if (format === 'csv') {
-//             const headers = ['Date', 'Receipt No', 'Student', 'Class', 'Amount', 'Method', 'Received By'];
-//             const rows = report.payments.map(payment => [
-//                 new Date(payment.createdAt).toISOString().split('T')[0],
-//                 payment.receiptNumber || payment._id,
-//                 payment.student?.name || 'N/A',
-//                 payment.student?.class || 'N/A',
-//                 payment.amount,
-//                 payment.method,
-//                 payment.receivedBy?.name || 'N/A'
-//             ]);
-
-//             return { headers, rows };
-//         }
-
-//         // For other formats, you can add more converters
-//         return report;
-//     };
-
-//     // ... [Keep all existing methods from previous code]
-
-//     // NEW METHOD: Get class-wise collection for frontend
-//     static async getClassWiseCollection(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = null,
-//             endDate = null
-//         } = filters;
-
-//         const query = {
-//             session,
-//             status: 'completed'
-//         };
-
-//         if (startDate || endDate) {
-//             query.createdAt = {};
-//             if (startDate) {
-//                 query.createdAt.$gte = new Date(startDate);
-//             }
-//             if (endDate) {
-//                 query.createdAt.$lte = new Date(endDate);
-//             }
-//         }
-
-//         const classWiseData = await Payment.aggregate([
-//             { $match: query },
-//             {
-//                 $lookup: {
-//                     from: 'students',
-//                     localField: 'student',
-//                     foreignField: '_id',
-//                     as: 'studentInfo'
-//                 }
-//             },
-//             { $unwind: '$studentInfo' },
-//             {
-//                 $lookup: {
-//                     from: 'classes',
-//                     localField: 'studentInfo.class',
-//                     foreignField: '_id',
-//                     as: 'classInfo'
-//                 }
-//             },
-//             { $unwind: { path: '$classInfo', preserveNullAndEmptyArrays: true } },
-//             {
-//                 $group: {
-//                     _id: '$classInfo._id',
-//                     className: { $first: '$classInfo.name' },
-//                     totalAmount: { $sum: '$amount' },
-//                     studentCount: { $addToSet: '$student' },
-//                     paymentCount: { $sum: 1 }
-//                 }
-//             },
-//             {
-//                 $project: {
-//                     _id: 0,
-//                     classId: '$_id',
-//                     className: 1,
-//                     totalAmount: 1,
-//                     studentCount: { $size: '$studentCount' },
-//                     paymentCount: 1,
-//                     averagePerStudent: {
-//                         $cond: [
-//                             { $gt: [{ $size: '$studentCount' }, 0] },
-//                             { $divide: ['$totalAmount', { $size: '$studentCount' }] },
-//                             0
-//                         ]
-//                     }
-//                 }
-//             },
-//             { $sort: { totalAmount: -1 } }
-//         ]);
-
-//         return classWiseData;
-//     }
-
-//     // NEW METHOD: Get daily collection data formatted for frontend chart
-//     static async getDailyCollectionForChart(filters = {}) {
-//         const dailySummary = await this.getDailyCollectionSummary(filters);
-
-//         return dailySummary.dailySummary.map(day => ({
-//             date: day.date,
-//             amount: day.totalAmount,
-//             transactions: day.transactionCount,
-//             average: day.averageAmount
-//         }));
-//     }
-
-//     // NEW METHOD: Get payment method data formatted for frontend
-//     static async getPaymentMethodData(filters = {}) {
-//         const methodData = await this.getCollectionByMethod(filters);
-
-//         return methodData.byMethod.map(method => ({
-//             method: method.method,
-//             amount: method.totalAmount,
-//             count: method.transactionCount,
-//             percentage: method.percentage
-//         }));
-//     }
-
-//     // NEW METHOD: Get top students formatted for frontend
-//     static async getTopStudentsFormatted(filters = {}) {
-//         const topStudents = await this.getTopContributingStudents(filters);
-
-//         return topStudents.topStudents.map((student, index) => ({
-//             name: student.studentName,
-//             class: student.className || 'N/A',
-//             amount: student.totalAmount,
-//             payments: student.paymentCount,
-//             averagePayment: student.averagePayment
-//         }));
-//     }
-
-//     // NEW METHOD: Get collection statistics for summary cards
-//     static async getCollectionStatistics(filters = {}) {
-//         const {
-//             session = this.getCurrentSession(),
-//             startDate = null,
-//             endDate = null
-//         } = filters;
-
-//         const query = {
-//             session,
-//             status: 'completed'
-//         };
-
-//         if (startDate || endDate) {
-//             query.createdAt = {};
-//             if (startDate) query.createdAt.$gte = new Date(startDate);
-//             if (endDate) query.createdAt.$lte = new Date(endDate);
-//         }
-
-//         // Get today's date for comparison
-//         const today = new Date();
-//         today.setHours(0, 0, 0, 0);
-//         const yesterday = new Date(today);
-//         yesterday.setDate(yesterday.getDate() - 1);
-
-//         const todayQuery = { ...query, createdAt: { $gte: today } };
-//         const yesterdayQuery = {
-//             ...query,
-//             createdAt: {
-//                 $gte: yesterday,
-//                 $lt: today
-//             }
-//         };
-
-//         const [todayStats, yesterdayStats, overallStats] = await Promise.all([
-//             Payment.aggregate([
-//                 { $match: todayQuery },
-//                 {
-//                     $group: {
-//                         _id: null,
-//                         totalAmount: { $sum: '$amount' },
-//                         count: { $sum: 1 }
-//                     }
-//                 }
-//             ]),
-//             Payment.aggregate([
-//                 { $match: yesterdayQuery },
-//                 {
-//                     $group: {
-//                         _id: null,
-//                         totalAmount: { $sum: '$amount' },
-//                         count: { $sum: 1 }
-//                     }
-//                 }
-//             ]),
-//             Payment.aggregate([
-//                 { $match: query },
-//                 {
-//                     $group: {
-//                         _id: null,
-//                         totalAmount: { $sum: '$amount' },
-//                         count: { $sum: 1 },
-//                         average: { $avg: '$amount' }
-//                     }
-//                 }
-//             ])
-//         ]);
-
-//         const todayData = todayStats[0] || { totalAmount: 0, count: 0 };
-//         const yesterdayData = yesterdayStats[0] || { totalAmount: 0, count: 0 };
-//         const overallData = overallStats[0] || { totalAmount: 0, count: 0, average: 0 };
-
-//         // Calculate percentage change
-//         const amountChange = yesterdayData.totalAmount > 0
-//             ? ((todayData.totalAmount - yesterdayData.totalAmount) / yesterdayData.totalAmount) * 100
-//             : 0;
-
-//         return {
-//             todayCollection: todayData.totalAmount,
-//             todayTransactions: todayData.count,
-//             totalCollection: overallData.totalAmount,
-//             totalTransactions: overallData.count,
-//             averageTransaction: overallData.average || 0,
-//             amountChange: parseFloat(amountChange.toFixed(2))
-//         };
-//     }
-
-// }
-
-// module.exports = ReportService;

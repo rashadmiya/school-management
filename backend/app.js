@@ -7,34 +7,6 @@ const path = require("path");
 const ErrorHandler = require("./utils/error")
 const app = express();
 
-
-// working cors
-// const allowedOrigins = process.env.FRONTEND_URL_FOR_CORS
-//   .split(",")
-//   .map(origin => origin.trim());
-
-// const corsOptions = {
-//   origin(origin, callback) {
-
-//     // Allow requests like Postman or server-to-server
-//     if (!origin) {
-//       return callback(null, true);
-//     }
-
-//     if (allowedOrigins.includes(origin)) {
-//       return callback(null, true);
-//     }
-
-//     return callback(new Error("Not allowed by CORS"));
-//   },
-
-//   credentials: true,
-//   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-//   allowedHeaders: ["Content-Type", "Authorization"],
-// };
-
-// app.use(cors(corsOptions));
-
 app.use(cors({
   origin: true,
   credentials: true,
@@ -44,6 +16,8 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 app.use(cookieParser());
 app.use(bodyParser.urlencoded({ extended: true, limit: "50mb" }));
+
+app.use(require('./middleware/requestContext'));
 
 // Serve static uploads folder
 app.use("/uploads", express.static(path.resolve(__dirname, "uploads")));
@@ -63,7 +37,7 @@ const attendance = require("./controllers/attendance");
 const classRoutes = require("./controllers/classRoutes");
 const examRoutes = require("./controllers/examRoutes");
 const gradeRoutes = require("./controllers/gradeRoutes");
-const parentRoutes = require("./controllers/parentRoutes");
+// const parentRoutes = require("./controllers/parentRoutes");
 const resultRoutes = require("./controllers/resultRoutes");
 const resultSheetRoutes = require("./controllers/resultSheetRoutes");
 const routineRoutes = require("./controllers/routineRoutes");
@@ -71,7 +45,7 @@ const studentRoutes = require("./controllers/studentRoutes");
 const subjectRoutes = require("./controllers/subjectRoutes");
 const teacherRoutes = require("./controllers/teacherRoutes");
 const roleRoutes = require("./controllers/roleRoutes");
-const financeRoutes = require("./controllers/financeRoutes");
+// const financeRoutes = require("./controllers/financeRoutes");
 const adminRoutes = require("./controllers/adminRoutes");
 const publicRoutes = require("./controllers/publicRoutes");
 const announcementRoutes = require("./controllers/announcementRoutes");
@@ -92,6 +66,15 @@ const reportRoutes = require('./financeSystem/routes/reportRoutes');
 const galleryRoutes = require('./controllers/galleryRoutes');
 const heroSlider = require('./controllers/heroSliderRoutes');
 //finance routes
+//finance new routes
+const paymentIntentRoutes = require('./financeSystem/routes/paymentIntentRoutes');
+const auditRoutes = require('./financeSystem/routes/auditRoutes');
+const adjustmentRoutes = require('./financeSystem/routes/adjustmentRoutes');
+const reconciliationRoutes = require('./financeSystem/routes/reconciliationRoutes');
+const notificationRoutes = require('./financeSystem/routes/notificationRoutes');
+const pdfRoutes = require('./financeSystem/routes/pdfRoutes');
+const billRoutes = require('./financeSystem/routes/billRoutes');
+
 
 app.use("/api/s2/user", user);
 app.use("/api/s2/assignments", assignmentRoutes);
@@ -99,7 +82,11 @@ app.use("/api/s2/attendance", attendance);
 app.use("/api/s2/classes", classRoutes);
 app.use("/api/s2/exams", examRoutes);
 app.use("/api/s2/grade", gradeRoutes);
-app.use("/api/s2/parents", parentRoutes);
+// app.use("/api/s2/parents", parentRoutes);
+app.use('/api/s2/parent-auth', require('./controllers/parentAuthRoutes'));
+app.use('/api/s2/parent',      require('./controllers/parentRoutes'));
+app.use('/api/s2/parents',     require('./controllers/parentAdminRoutes'));
+
 app.use("/api/s2/results", resultRoutes);
 app.use("/api/result-sheets", resultSheetRoutes);
 app.use("/api/s2/routines", routineRoutes);
@@ -128,6 +115,14 @@ app.use("/api/s2/payments", paymentRoutes);
 app.use("/api/s2/refunds", refundRoutes);
 app.use("/api/s2/waivers", waiverRoutes);
 app.use('/api/s2/reports', reportRoutes);
+// NEW: Mount finance-specific routes
+app.use('/api/s2/payment-intents', paymentIntentRoutes);
+app.use('/api/s2/audit', auditRoutes);
+app.use('/api/s2/adjustments', adjustmentRoutes);
+app.use('/api/s2/reconciliation', reconciliationRoutes);
+app.use('/api/s2/notifications', notificationRoutes);
+app.use('/api/s2/pdf', pdfRoutes);
+app.use('/api/s2/bills', billRoutes);
 
 // Global error handler
 app.use(ErrorHandler);

@@ -10,7 +10,6 @@ import UserManagement from "./pages/auth/UserManagement";
 import ClassesPage from "./pages/classes/ClassesPage";
 import Dashboard from "./pages/dashboard/Dashboard";
 import ExamsPage from "./pages/exams/ExamsPage";
-import ParentsPage from "./pages/parents/ParentsPage";
 import ResultSheetsPage from "./pages/results/ResultSheetsPage";
 import ResultPage from "./pages/results/ResultsPage";
 import RolesPage from "./pages/roles/RolesPage";
@@ -19,22 +18,21 @@ import StudentsPage from "./pages/students/StudentsPage";
 import SubjectsPage from "./pages/subjects/SubjectsPage";
 import TeachersPage from "./pages/teachers/TeachersPage";
 
-// Finance Components - Import directly
-import FinanceDashboard from "@/pages/finance/FinanceDashboard";
-import FeeTemplates from "@/pages/finance/fees/FeeTemplates";
-import StudentFees from "@/pages/finance/fees/StudentFees";
-import ApplyFees from "@/pages/finance/fees/ApplyFees";
-import ReceivePayment from "@/pages/finance/Payments/ReceivePayment";
-import PaymentHistory from "@/pages/finance/Payments/PaymentHistory";
-import AdvanceBalance from "@/pages/finance/Payments/AdvanceBalance";
-import ProcessRefund from "@/pages/finance/Refunds/ProcessRefund";
-import RefundHistory from "@/pages/finance/Refunds/RefundHistory";
-import RequestWaiver from "@/pages/finance/Waivers/RequestWaiver";
-import ApproveWaivers from "@/pages/finance/Waivers/ApproveWaivers";
-import StudentLedger from "@/pages/finance/Ledger/StudentLedger";
-import CollectionReport from "@/pages/finance/Reports/CollectionReport";
-import OutstandingReport from "@/pages/finance/Reports/OutstandingReport";
-import SessionSettings from "@/pages/finance/Settings/SessionSettings";
+//parent
+
+import ParentChangePin from "./pages/parents/ParentChangePin";
+import ParentLogin from "./pages/auth/ParentLogin";
+import ParentsPage from "./pages/parents/ParentsPage";
+import ChildPaymentDetails from "./pages/parents/ChildPaymentDetails";
+import ParentPayments from "./pages/parents/ParentPayments";
+import ChildrenAttendance from "./components/parent/ChildrenAttendance";
+import ChildrenList from "./components/parent/ChildrenList";
+import ChildrenResults from "./components/parent/ChildrenResults";
+import ParentDashboard from "./components/parent/ParentDashboard";
+import ParentLayout from "./components/parent/ParentLayout";
+import ParentProfile from "./components/parent/ParentProfile";
+import ParentPayOnline from "./pages/parents/ParentPayOnline";
+import ParentPaymentResult from "./pages/parents/ParentPaymentResult";
 
 // Teacher Portal Components
 import TeacherDashboard from "./components/teacher/TeacherDashboard";
@@ -55,22 +53,20 @@ import StudentExams from "./pages/students/StudentExams";
 import StudentProfile from "./pages/students/StudentProfile";
 import StudentResults from "./pages/students/StudentResults";
 import StudentSchedule from "./pages/students/StudentSchedule";
+import StudentPayments from "./pages/students/StudentPayments";
+import StudentFeeDetail from "./pages/students/StudentFeeDetail";
+import StudentPaymentReceipt from "./components/student/StudentPaymentReceipt";
+import StudentPayOnline from "./pages/students/StudentPayOnline";
+import StudentPaymentResult from "./pages/students/StudentPaymentResult";
 
-// Parent Portal Components
-import ChildrenAttendance from "./components/parent/ChildrenAttendance";
-import ChildrenList from "./components/parent/ChildrenList";
-import ChildrenResults from "./components/parent/ChildrenResults";
-import ParentDashboard from "./components/parent/ParentDashboard";
-import ParentLayout from "./components/parent/ParentLayout";
-import ParentProfile from "./components/parent/ParentProfile";
+// Public and others Components
+
 import PaymentReceipt from "./components/parent/PaymentReceipt";
 import PublicLayout from "./components/public/PublicLayout";
 import AdminProtectedRoute from "./hooks/AdminProtectedRoute";
 import AdministrationLayout from "./pages/administration/AdministrationLayout";
 import AssignmentsPage from "./pages/assignments/AssignmentsPage";
 import ClassDetailsPage from "./pages/classes/ClassDetailsPage";
-import ChildPaymentDetails from "./pages/parents/ChildPaymentDetails";
-import ParentPayments from "./pages/parents/ParentPayments";
 import AnnouncementManager from "./pages/public/admin/AnnouncementManager";
 import PageManager from "./pages/public/admin/PageManager";
 import SettingsManager from "./pages/public/admin/SettingManager";
@@ -103,6 +99,25 @@ import ClubManagementPage from "./pages/public/admin/ClubManagementPage";
 import GalleryPage from "./pages/public/GalleryPage";
 import GalleryManager from "./pages/public/admin/GalleryManager";
 import HeroSliderManager from "./pages/public/admin/HeroSliderManager";
+// Finance Components - Import directly
+import FeeTemplates from '@/pages/finance/fees/FeeTemplates';
+import ApplyFeeWizard from '@/pages/finance/fees/ApplyFeeWizard';
+import EligibleStudents from '@/pages/finance/fees/EligibleStudents';
+import ReceivePayment from "./pages/finance/payments/ReceivePayment";
+import PaymentHistory from "./pages/finance/payments/PaymentHistory";
+import StudentStatement from "./pages/finance/students/StudentStatement";
+import StudentLedger from "./pages/finance/students/StudentLedger";
+import StudentFees from "./pages/finance/students/StudentFees";
+import RequestWaiver from "./pages/finance/waivers/RequestWaiver";
+import ApproveWaivers from "./pages/finance/waivers/ApproveWaivers";
+import Refunds from "./pages/finance/refunds/Refunds";
+import Adjustments from "./pages/finance/adjustments/Adjustments";
+import FinanceDashboard from "./pages/finance/FinanceDashboard";
+import CollectionReport from "./pages/finance/reports/CollectionReport";
+import AgingReport from "./pages/finance/reports/AgingReport";
+import Reconciliation from "./pages/finance/reports/Reconciliation";
+import AuditLog from "./pages/finance/audit/AuditLog";
+import NotificationPreferences from "./pages/finance/settings/NotificationPreferences";
 
 function App() {
   return (
@@ -130,7 +145,10 @@ function App() {
           <Route path="clubs" element={<ClubsPage />} />
           <Route path="gallery" element={<GalleryPage />} />
         </Route>
-
+        {/* Public */}
+        <Route path="/parent/login" element={<ParentLogin />} />
+        {/* Requires parent auth, but does NOT require PIN change */}
+        <Route path="/parent/change-pin" element={<ParentChangePin />} />
         {/* Admin/Teacher Routes with Dashboard Layout */}
         <Route path="/admin/*" element={<DashboardWrapper>
           <Routes>
@@ -160,22 +178,48 @@ function App() {
             <Route path="settings" element={<AdminProtectedRoute children={<SettingsManager />} />} />
             <Route path="announcements" element={<AdminProtectedRoute children={<AnnouncementManager />} />} />
             <Route path="hero-slider" element={<AdminProtectedRoute children={<HeroSliderManager />} />} />
-            {/* Finance Routes - Now inside admin layout */}
-            <Route path="finance" element={<AdminProtectedRoute children={<FinanceDashboard />} />} />
-            <Route path="finance/fees/templates" element={<AdminProtectedRoute children={<FeeTemplates />} />} />
-            <Route path="finance/fees/students" element={<AdminProtectedRoute children={<StudentFees />} />} />
-            <Route path="finance/fees/apply" element={<AdminProtectedRoute children={<ApplyFees />} />} />
-            <Route path="finance/payments/receive" element={<AdminProtectedRoute children={<ReceivePayment />} />} />
-            <Route path="finance/payments/history" element={<AdminProtectedRoute children={<PaymentHistory />} />} />
-            <Route path="finance/payments/advance" element={<AdminProtectedRoute children={<AdvanceBalance />} />} />
-            <Route path="finance/refunds" element={<AdminProtectedRoute children={<ProcessRefund />} />} />
-            <Route path="finance/refunds/history" element={<AdminProtectedRoute children={<RefundHistory />} />} />
-            <Route path="finance/waivers/request" element={<AdminProtectedRoute children={<RequestWaiver />} />} />
-            <Route path="finance/waivers/approve" element={<AdminProtectedRoute children={<ApproveWaivers />} />} />
-            <Route path="finance/ledger" element={<AdminProtectedRoute children={<StudentLedger />} />} />
-            <Route path="finance/reports/collection" element={<AdminProtectedRoute children={<CollectionReport />} />} />
-            <Route path="finance/reports/outstanding" element={<AdminProtectedRoute children={<OutstandingReport />} />} />
-            <Route path="finance/settings/session" element={<AdminProtectedRoute children={<SessionSettings />} />} />
+
+            {/* ============ FINANCE (nested under /admin/finance) ============ */}
+            <Route path="finance">
+              {/* /admin/finance */}
+              <Route index element={<FinanceDashboard />} />
+
+              {/* Fee templates */}
+              <Route path="fees/templates" element={<FeeTemplates />} />
+              <Route path="fees/templates/:id/eligible" element={<EligibleStudents />} />
+              <Route path="fees/apply" element={<ApplyFeeWizard />} />
+              <Route path="fees/students" element={<StudentFees />} />
+
+              {/* Payments */}
+              <Route path="payments/receive" element={<ReceivePayment />} />
+              <Route path="payments/history" element={<PaymentHistory />} />
+
+              {/* Student statement, ledger, fees */}
+              <Route path="students/:studentId" element={<StudentStatement />} />
+              <Route path="students/:studentId/statement" element={<StudentStatement />} />
+              <Route path="students/:studentId/ledger" element={<StudentLedger />} />
+              <Route path="students/:studentId/fees" element={<StudentFees />} />
+              {/* <Route path="students/payments" element={StudentPayments} /> */}
+              {/* Picker pages (no studentId) */}
+              <Route path="statement" element={<StudentStatement />} />
+              <Route path="ledger" element={<StudentLedger />} />
+
+              {/* Workflows */}
+              <Route path="waivers" element={<RequestWaiver />} />
+              <Route path="waivers/request" element={<RequestWaiver />} />
+              <Route path="waivers/approve" element={<ApproveWaivers />} />
+              <Route path="refunds" element={<Refunds />} />
+              <Route path="adjustments" element={<Adjustments />} />
+
+              {/* Reports & settings */}
+              <Route path="reports/collection" element={<CollectionReport />} />
+              <Route path="reports/aging" element={<AgingReport />} />
+              <Route path="reconciliation" element={<Reconciliation />} />
+              <Route path="audit" element={<AuditLog />} />
+              <Route path="settings/notifications" element={<NotificationPreferences />} />
+            </Route>
+
+            {/* Admin Management Pages */}
             <Route path="staff" element={<StaffManagementPage />} />
             <Route path="committee" element={<CommitteeManagementPage />} />
             <Route path="cabinet" element={<CabinetManagementPage />} />
@@ -187,8 +231,6 @@ function App() {
         </DashboardWrapper>
         } />
 
-        {/* Remove this - finance is now inside admin */}
-        {/* <Route path="/finance/*" element={<FinanceRoutes />} /> */}
 
         {/* Teacher Portal Routes */}
         <Route path="/teacher/*" element={
@@ -218,18 +260,20 @@ function App() {
           <Route path="schedule" element={<StudentSchedule />} />
           <Route path="assignments" element={<StudentAssignments />} />
           <Route path="exams" element={<StudentExams />} />
-          <Route path="exams-schedule" element={<StudentExamRoutinesPage />} />
+          <Route path="exams/schedule" element={<StudentExamRoutinesPage />} />
           <Route path="attendance" element={<StudentAttendance />} />
           <Route path="results" element={<StudentResults />} />
           <Route path="profile" element={<StudentProfile />} />
+
+          <Route path="payments" element={<StudentPayments />} />
+          <Route path="payments/fees/:feeId" element={<StudentFeeDetail />} />
+          <Route path="payments/receipt/:paymentId" element={<StudentPaymentReceipt />} />
+          <Route path="payments/pay" element={<StudentPayOnline />} />
+          <Route path="payments/result" element={<StudentPaymentResult />} />
         </Route>
 
-        {/* Parent Portal Routes */}
-        <Route path="/parent/*" element={
-          <ProtectedRoute allowedRoles={['parent']}>
-            <ParentLayout />
-          </ProtectedRoute>
-        }>
+        {/* ---------- Protected parent portal ---------- */}
+        <Route path="/parent" element={<ParentLayout />}>
           <Route index element={<ParentDashboard />} />
           <Route path="children" element={<ChildrenList />} />
           <Route path="attendance" element={<ChildrenAttendance />} />
@@ -238,6 +282,8 @@ function App() {
           <Route path="payments" element={<ParentPayments />} />
           <Route path="payments/:childId" element={<ChildPaymentDetails />} />
           <Route path="payments/receipt/:paymentId" element={<PaymentReceipt />} />
+          <Route path="payments/pay" element={<ParentPayOnline />} />
+          <Route path="payments/result" element={<ParentPaymentResult />} />
         </Route>
 
         {/* Catch all route */}

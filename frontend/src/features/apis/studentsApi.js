@@ -241,25 +241,12 @@ export const studentApi = api.injectEndpoints({
     }),
 
     // Student payment endpoints (keep as is)
-    getStudentPayments: builder.query({
+    getStudentMyFinance: builder.query({
       query: ({ academicYear, page = 1, limit = 10 } = {}) => ({
-        url: `/students/my/payments`,
+        url: `/students/my/finance`,
         params: { academicYear, page, limit }
       }),
       providesTags: ['StudentPayments']
-    }),
-
-    getStudentPaymentSummary: builder.query({
-      query: ({ academicYear } = {}) => ({
-        url: `/students/my/payments/summary`,
-        params: { academicYear }
-      }),
-      providesTags: ['StudentPaymentSummary']
-    }),
-
-    getStudentPaymentReceipt: builder.query({
-      query: (paymentId) => `/students/my/payments/${paymentId}/receipt`,
-      providesTags: ['StudentPaymentReceipt']
     }),
 
     getStudentDashboard: builder.query({
@@ -306,7 +293,93 @@ export const studentApi = api.injectEndpoints({
         params,
       }),
     }),
+    getStudentMe: builder.query({
+      query: () => "/students/me",
+      providesTags: ["StudentProfile"],
+    }),
 
+    /* ============================================================
+ *  Student finance — extended
+ * ============================================================ */
+
+    getStudentFinance: builder.query({
+      query: ({ session } = {}) => ({
+        url: "/students/my/finance",
+        params: session ? { session } : {},
+      }),
+      providesTags: ["MyFinance"],
+    }),
+
+    getStudentFinanceSummary: builder.query({
+      query: ({ session } = {}) => ({
+        url: "/students/my/finance/summary",
+        params: session ? { session } : {},
+      }),
+      providesTags: ["MyFinance"],
+    }),
+
+    getStudentBill: builder.query({
+      query: ({ monthKey, session } = {}) => ({
+        url: `/students/my/finance/bills/${monthKey}`,
+        params: session ? { session } : {},
+      }),
+      providesTags: (result, error, arg) => [
+        { type: "MyFinance", id: `bill-${arg.monthKey}` },
+      ],
+    }),
+
+    getStudentFeeDetail: builder.query({
+      query: (feeId) => `/students/my/finance/fees/${feeId}`,
+      providesTags: (result, error, feeId) => [
+        { type: "MyFinance", id: `fee-${feeId}` },
+      ],
+    }),
+
+    getStudentWaivers: builder.query({
+      query: ({ session } = {}) => ({
+        url: "/students/my/finance/waivers",
+        params: session ? { session } : {},
+      }),
+      providesTags: ["MyFinance"],
+    }),
+
+    getStudentAdvanceTransactions: builder.query({
+      query: ({ session } = {}) => ({
+        url: "/students/my/finance/advance/transactions",
+        params: session ? { session } : {},
+      }),
+      providesTags: ["MyFinance"],
+    }),
+
+    /* ============================================================
+ *  Student online payments
+ * ============================================================ */
+
+    createStudentPaymentIntent: builder.mutation({
+      query: (data) => ({
+        url: "/students/my/payment-intents",
+        method: "POST",
+        body: data,
+      }),
+      invalidatesTags: ["MyFinance"],
+    }),
+
+    getStudentPaymentIntent: builder.query({
+      query: (intentId) => `/students/my/payment-intents/${intentId}`,
+      providesTags: (result, error, intentId) => [
+        { type: "MyFinance", id: `intent-${intentId}` },
+      ],
+    }),
+
+    cancelStudentPaymentIntent: builder.mutation({
+      query: (intentId) => ({
+        url: `/students/my/payment-intents/${intentId}/cancel`,
+        method: "POST",
+      }),
+      invalidatesTags: (result, error, intentId) => [
+        { type: "MyFinance", id: `intent-${intentId}` },
+      ],
+    }),
 
   }),
 });
@@ -334,14 +407,32 @@ export const {
   //
   useGetTodayRoutinesQuery,
   //
-  useGetStudentPaymentsQuery,
-  useGetStudentPaymentSummaryQuery,
-  useGetStudentPaymentReceiptQuery,
+  useGetStudentMyFinanceQuery,
   useGetStudentDashboardQuery,
+  useGetStudentMeQuery,
   // Financial Summary
   useGetStudentFinancialSummaryQuery,
   useUpdateStudentFeeCategoryMutation,
   useUpdateBulkStudentFeesMutation,
   useSearchStudentsQuery,
   useLazySearchStudentsLazyQuery,
+
+  // ... existing exports
+  useGetStudentFinanceQuery,
+  useGetStudentFinanceSummaryQuery,
+  useGetStudentBillQuery,
+  useGetStudentFeeDetailQuery,
+  useGetStudentWaiversQuery,
+  useGetStudentAdvanceTransactionsQuery,
+  // online payment
+  useCreateStudentPaymentIntentMutation,
+  useGetStudentPaymentIntentQuery,
+  useCancelStudentPaymentIntentMutation,
+
 } = studentApi;
+
+// features/apis/studentsApi.js — module-level export
+export const studentStatementUrl = (session) => {
+  const base = `${import.meta.env.VITE_API_URL}/students/my/finance/statement`;
+  return session ? `${base}?session=${encodeURIComponent(session)}` : base;
+};

@@ -32,6 +32,49 @@ class FeeController {
         }
     }
 
+    static async updateFeeTemplate(req, res) {
+        const template = await FeeTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Fee template not found' });
+        }
+
+        // If amount changes and instances already exist, warn (do not silently mutate history)
+        if (req.body.amount !== undefined && String(req.body.amount) !== String(template.amount)) {
+            const instanceCount = await FeeInstance.countDocuments({ feeTemplate: template._id, isActive: true });
+            if (instanceCount > 0) {
+                return res.status(400).json({
+                    success: false,
+                    message: `Cannot change amount: ${instanceCount} fee instances already exist. Deactivate and create a new template instead.`,
+                });
+            }
+        }
+
+        const allowed = ['title', 'description', 'amount', 'frequency', 'dueDay', 'taxPercentage', 'isActive', 'lateFee', 'appliesTo'];
+        const updates = {};
+        for (const k of allowed) if (req.body[k] !== undefined) updates[k] = req.body[k];
+        updates.updatedBy = req.user._id;
+
+        const updated = await FeeTemplate.findByIdAndUpdate(req.params.id, updates, { new: true, runValidators: true });
+        res.json({ success: true, data: updated });
+    }
+
+    static async deleteFeeTemplate(req, res) {
+        const template = await FeeTemplate.findById(req.params.id);
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Fee template not found' });
+        }
+
+        const instanceCount = await FeeInstance.countDocuments({ feeTemplate: template._id, isActive: true });
+        if (instanceCount > 0) {
+            return res.status(400).json({
+                success: false,
+                message: `Cannot delete: ${instanceCount} fee instances reference this template. Deactivate it instead.`,
+            });
+        }
+
+        await template.deleteOne();
+        res.json({ success: true, message: 'Fee template deleted' });
+    }
     // POST /api/fees/templates/:id/apply
     static async applyFee(req, res) {
         try {
@@ -114,6 +157,27 @@ class FeeController {
         }
     }
 
+    //get fee instances
+    static async getFeeInstance(req, res) {
+        try {
+            console.log("get fee instance called:", req.params.id)
+            const feeInstance = await FeeService.getFeeInstance(
+                req.params.id,
+            );
+
+            res.json({
+                success: true,
+                message: 'Fee instance loaded successfully',
+                data: feeInstance
+            });
+        } catch (err) {
+            res.status(400).json({
+                success: false,
+                message: err.message
+            });
+        }
+    }
+
     // GET /api/fees/templates
     static async getFeeTemplates(req, res) {
         try {
@@ -145,93 +209,12 @@ class FeeController {
         }
     }
 
-    // Add this to your backend FeeController.js
-    //   static async getEligibleStudents(req, res) {
-    //     try {
-    //         const template = await FeeTemplate.findById(req.params.id);
-    //         if (!template) {
-    //             return res.status(404).json({
-    //                 success: false,
-    //                 message: 'Fee template not found'
-    //             });
-    //         }
-
-    //         const currentSession = template.session || "2025-2026";
-    //         let students = [];
-    //         console.log("called this.getEligibleStudents:", template);
-
-    //         // REMOVED isActive from query since your Student model doesn't have it
-    //         switch (template.appliesTo.scope) {
-    //             case 'all':
-    //                 students = await Student.find({
-    //                     session: currentSession
-    //                 }).select('_id name rollNumber class section feeCategory');
-    //                 break;
-    //             case 'class':
-    //                 students = await Student.find({
-    //                     class: template.appliesTo.class,
-    //                     session: currentSession
-    //                 }).select('_id name rollNumber class section feeCategory');
-    //                 break;
-    //             case 'section':
-    //                 students = await Student.find({
-    //                     class: template.appliesTo.class,
-    //                     section: template.appliesTo.section,
-    //                     session: currentSession
-    //                 }).select('_id name rollNumber class section feeCategory');
-    //                 break;
-    //             case 'individual':
-    //                 students = await Student.find({
-    //                     _id: template.appliesTo.individualStudent,
-    //                     session: currentSession
-    //                 }).select('_id name rollNumber class section feeCategory');
-    //                 break;
-    //         }
-
-    //         console.log("Found students:", students.length);
-
-    //         // Check which students already have this fee
-    //         const studentIds = students.map(s => s._id);
-    //         const existingFees = await FeeInstance.find({
-    //             student: { $in: studentIds },
-    //             feeTemplate: template._id,
-    //             session: currentSession,
-    //             isActive: true
-    //         }).select('student');
-
-    //         const existingStudentIds = new Set(existingFees.map(f => f.student.toString()));
-
-    //         res.json({
-    //             success: true,
-    //             data: {
-    //                 template: {
-    //                     title: template.title,
-    //                     scope: template.appliesTo.scope,
-    //                     appliesTo: template.appliesTo
-    //                 },
-    //                 eligibleStudents: students.map(student => ({
-    //                     ...student.toObject(),
-    //                     alreadyHasFee: existingStudentIds.has(student._id.toString())
-    //                 })),
-    //                 counts: {
-    //                     total: students.length,
-    //                     alreadyHasFee: existingStudentIds.size,
-    //                     willBeApplied: students.length - existingStudentIds.size
-    //                 }
-    //             }
-    //         });
-    //     } catch (err) {
-    //         console.error("Error:", err);
-    //         res.status(400).json({
-    //             success: false,
-    //             message: err.message
-    //         });
-    //     }
-    // }
 
     static async getEligibleStudents(req, res) {
         try {
-            const template = await FeeTemplate.findById(req.params.id);
+            const template = await FeeTemplate.findById(req.params.id)
+                .populate('appliesTo.class', 'name section')
+                .populate('appliesTo.section', 'name');
             if (!template) {
                 return res.status(404).json({
                     success: false,
@@ -368,6 +351,7 @@ class FeeController {
 
     static async getCurrentSession(req, res) {
         try {
+            console.log('called current session in controller')
             const currentSession = FeeService.getCurrentSession();
 
             res.json({
@@ -429,44 +413,21 @@ class FeeController {
             });
         }
     }
+
+    static async getFeeTemplate(req, res) {
+        const template = await FeeTemplate.findById(req.params.id)
+            .populate('appliesTo.class', 'name section')
+            .populate('appliesTo.section', 'name')
+            .populate('appliesTo.individualStudent', 'name rollNumber')
+            .populate('createdBy', 'name email')
+            .lean();
+        if (!template) {
+            return res.status(404).json({ success: false, message: 'Fee template not found' });
+        }
+        res.json({ success: true, data: template });
+    }
+
+
 }
 
 module.exports = FeeController;
-
-// const FeeService = require("../services/FeeService");
-// class FeeController {
-//   // POST /api/fees/templates
-//   static async createTemplate(req, res) {
-//     try {
-//       const template = await FeeService.createTemplate(req.body);
-//       res.status(201).json({
-//         success: true,
-//         data: template
-//       });
-//     } catch (err) {
-//       res.status(400).json({
-//         success: false,
-//         message: err.message
-//       });
-//     }
-//   }
-
-//   // POST /api/fees/templates/:id/apply
-//   static async applyFee(req, res) {
-//     try {
-//       const result = await FeeService.applyFee(req.params.id);
-//       res.json({
-//         success: true,
-//         message: "Fee applied successfully",
-//         data: result
-//       });
-//     } catch (err) {
-//       res.status(400).json({
-//         success: false,
-//         message: err.message
-//       });
-//     }
-//   }
-// }
-
-// module.exports = FeeController;

@@ -1,684 +1,459 @@
-// services/PaymentService.js - COMPLETE REWRITE
+// services/PaymentService.js
 const mongoose = require('mongoose');
 const Payment = require('../financeSystem/models/Payment');
 const PaymentAllocation = require('../financeSystem/models/PaymentAllocation');
 const FeeInstance = require('../financeSystem/models/FeeInstance');
 const AdvanceBalance = require('../financeSystem/models/AdvanceBalance');
-const LedgerService = require('./LedgerService');
+const StudentFinanceSummaryService = require('./StudentFinanceSummaryService');
 const TransactionService = require('./TransactionService');
+const { toDecimal, toDecimal128, round, min } = require('../utils/decimal');
+const { getCurrentSession } = require('../utils/accademicSession');
+const AuditService = require('../financeSystem/services/AuditService')
 const Student = require('../models/Student');
+const { signReceiptToken } = require('../utils/receiptToken')
+const NotificationService = require("../financeSystem/services/NotificationService")
 
 class PaymentService {
-  static async receivePayment(paymentData, userId) {
-    const session = await mongoose.startSession();
+    static async receivePayment(paymentData, userId, idempotencyKey = undefined) {
+        const dbSession = await mongoose.startSession();
 
-    try {
-      session.startTransaction();
+        try {
+            dbSession.startTransaction();
 
-      const { studentId, amount, method, methodDetails, reference, notes, session: sessionYear } = paymentData;
+            const {
+                studentId, amount, method, methodDetails,
+                reference, notes, session: sessionYear,
+            } = paymentData;
 
-      // Validate
-      if (amount <= 0) throw new Error('Payment amount must be positive');
+            const payAmount = toDecimal(amount);
+            if (payAmount.lte(0)) throw new Error('Payment amount must be positive');
 
-      // Generate transaction ID
-      const transactionId = await TransactionService.createTransactionId('payment', userId);
+            const currentSession = sessionYear || getCurrentSession();
 
-      // Check for duplicate transaction
-      const existingPayment = await Payment.findOne({ transactionId }).session(session);
-      if (existingPayment) {
-        return existingPayment; // Idempotent return
-      }
+            // 1. Idempotency at payment layer
+            if (idempotencyKey) {
+                const existing = await Payment.findOne({ idempotencyKey }).session(dbSession);
+                if (existing) {
+                    await dbSession.commitTransaction();
+                    return { payment: existing, allocations: [], advanceAmount: 0, idempotent: true };
+                }
+            }
 
-      await TransactionService.beginTransaction(transactionId, 'payment', {
-        userId,
-        studentId,
-        amount
-      });
+            // 2. Transaction record
+            const transactionId = await TransactionService.createTransactionId('payment', userId);
+            await TransactionService.beginTransaction(transactionId, 'payment', {
+                userId, studentId, amount: payAmount.toString(),
+            });
 
-      const currentSession = sessionYear || this.getCurrentSession();
+            // 3. Receipt number (sequential, inside txn)
+            const receiptNumber = await Payment.generateReceiptNumber(currentSession, dbSession);
 
-      // Create payment record
-      const payment = new Payment({
-        student: studentId,
-        amount,
-        currency: 'BDT',
-        method,
-        methodDetails,
-        reference,
-        transactionId,
-        receivedBy: userId,
-        status: 'completed',
-        session: currentSession,
-        notes
-      });
+            // 4. Create payment
+            // const [payment] = await Payment.create([{
+            //     student: studentId,
+            //     amount: toDecimal128(payAmount),
+            //     method,
+            //     methodDetails,
+            //     reference,
+            //     transactionId,
+            //     idempotencyKey,
+            //     receiptNumber,
+            //     receivedBy: userId,
+            //     status: 'completed',
+            //     session: currentSession,
+            //     notes,
+            // }], { session: dbSession });
 
-      await payment.save({ session });
+            const paymentDoc = {
+                student: studentId,
+                amount: toDecimal128(payAmount),
+                method,
+                methodDetails,
+                reference,
+                transactionId,
+                receiptNumber,
+                receivedBy: userId,
+                status: 'completed',
+                session: currentSession,
+                notes,
+            };
+            // Only attach the key when we actually have one — a null value would
+            // still be indexed by a plain unique index.
+            if (idempotencyKey) paymentDoc.idempotencyKey = idempotencyKey;
 
-      // Create ledger entry for payment
-      await LedgerService.createEntry({
-        student: studentId,
-        transactionId,
-        type: 'payment',
-        credit: amount,
-        refModel: 'Payment',
-        refId: payment._id,
-        description: `Payment received via ${method}`,
-        createdBy: userId,
-        session: currentSession
-      }, session);
+            const [payment] = await Payment.create([paymentDoc], { session: dbSession });
 
-      // Allocate payment
-      const allocationResult = await this.allocatePayment(
-        studentId,
-        amount,
-        payment._id,
-        transactionId,
-        userId,
-        currentSession,
-        session
-      );
+            // 5. Allocate
+            const allocResult = await this._allocate(
+                studentId, payAmount, payment._id, transactionId,
+                userId, currentSession, dbSession
+            );
 
-      // Update payment with allocation details
-      payment.allocatedAmount = allocationResult.allocatedAmount;
-      payment.advanceAmount = allocationResult.advanceAmount;
-      await payment.save({ session });
-
-      // Handle advance balance if any
-      if (allocationResult.advanceAmount > 0) {
-        await this.addToAdvanceBalance(
-          studentId,
-          allocationResult.advanceAmount,
-          payment._id,
-          transactionId,
-          userId,
-          currentSession,
-          session
-        );
-      }
-
-      await TransactionService.completeTransaction(transactionId, {
-        paymentId: payment._id,
-        allocations: allocationResult.allocations.length,
-        advanceAmount: allocationResult.advanceAmount
-      });
-
-      await session.commitTransaction();
-
-      return {
-        payment,
-        allocations: allocationResult.allocations,
-        advanceAmount: allocationResult.advanceAmount
-      };
-
-    } catch (error) {
-      await session.abortTransaction();
-
-      if (error.transactionId) {
-        await TransactionService.failTransaction(error.transactionId, error);
-      }
-
-      throw error;
-    } finally {
-      session.endSession();
-    }
-  }
-
-  static async allocatePayment(studentId, amount, paymentId, transactionId, userId, sessionYear, dbSession) {
-    let remaining = amount;
-    const allocations = [];
-    let allocatedAmount = 0;
-
-    // Get unpaid fees sorted by due date (oldest first)
-    const fees = await FeeInstance.find({
-      student: studentId,
-      status: { $in: ['unpaid', 'partial', 'overdue'] },
-      dueAmount: { $gt: 0 },
-      session: sessionYear,
-      isActive: true
-    })
-      .sort({ dueDate: 1, createdAt: 1 })
-      .session(dbSession);
-
-    for (const fee of fees) {
-      if (remaining <= 0) break;
-
-      const maxAllocatable = fee.dueAmount;
-      const allocateNow = Math.min(maxAllocatable, remaining);
-
-      if (allocateNow <= 0) continue;
-
-      // Update fee instance
-      fee.paidAmount += allocateNow;
-      fee.dueAmount = fee.totalAmount - fee.paidAmount - fee.waivedAmount - fee.advanceUsed;
-
-      // Update status
-      if (fee.dueAmount <= 0) {
-        fee.status = 'paid';
-        fee.paidDate = new Date();
-      } else if (fee.paidAmount > 0) {
-        fee.status = 'partial';
-      }
-
-      await fee.save({ session: dbSession });
-
-      // Create payment allocation record
-      const allocation = new PaymentAllocation({
-        payment: paymentId,
-        feeInstance: fee._id,
-        student: studentId,
-        amount: allocateNow,
-        allocatedBy: userId,
-        transactionId,
-        session: sessionYear
-      });
-
-      await allocation.save({ session: dbSession });
-
-      // Add allocation to fee instance
-      fee.paymentAllocations.push(allocation._id);
-      await fee.save({ session: dbSession });
-
-      // Create ledger entry for allocation
-      await LedgerService.createEntry({
-        student: studentId,
-        transactionId,
-        type: 'payment',
-        credit: allocateNow,
-        refModel: 'PaymentAllocation',
-        refId: allocation._id,
-        description: `Payment allocation to fee: ${fee.feeTemplate}`,
-        createdBy: userId,
-        session: sessionYear
-      }, dbSession);
-
-      allocations.push(allocation);
-      allocatedAmount += allocateNow;
-      remaining -= allocateNow;
-    }
-
-    return {
-      allocations,
-      allocatedAmount,
-      advanceAmount: remaining,
-      remaining
-    };
-  }
-
-  static async addToAdvanceBalance(studentId, amount, paymentId, transactionId, userId, sessionYear, dbSession) {
-    // Get or create advance balance
-    let advanceBalance = await AdvanceBalance.findOne({ student: studentId }).session(dbSession);
-
-    if (!advanceBalance) {
-      advanceBalance = new AdvanceBalance({
-        student: studentId,
-        amount: 0,
-        session: sessionYear,
-        transactions: []
-      });
-    }
-
-    const previousBalance = advanceBalance.amount;
-    const newBalance = previousBalance + amount;
-
-    // Update advance balance
-    advanceBalance.amount = newBalance;
-    advanceBalance.lastUpdated = new Date();
-
-    // Add transaction record
-    advanceBalance.transactions.push({
-      type: 'credit',
-      amount,
-      previousBalance,
-      newBalance,
-      paymentId,
-      transactionId,
-      description: `Advance from payment ${paymentId}`,
-      createdAt: new Date()
-    });
-
-    await advanceBalance.save({ session: dbSession });
-
-    // Create ledger entry for advance credit
-    await LedgerService.createEntry({
-      student: studentId,
-      transactionId,
-      type: 'advance_credit',
-      credit: amount,
-      refModel: 'AdvanceBalance',
-      refId: advanceBalance._id,
-      description: `Advance balance credit`,
-      createdBy: userId,
-      session: sessionYear
-    }, dbSession);
-
-    return advanceBalance;
-  }
-  static async getPaymentHistory(studentId, sessionYear, limit = 50) {
-    return Payment.find({
-      student: studentId,
-      session: sessionYear
-    })
-      .sort({ createdAt: -1 })
-      .limit(limit)
-      .populate('receivedBy', 'name email')
-      .lean();
-  }
-
-  static async getPaymentAllocations(paymentId) {
-    return PaymentAllocation.find({ payment: paymentId })
-      .populate('feeInstance', 'totalAmount dueAmount status')
-      .lean();
-  }
+            // 6. Update payment totals
+            payment.allocatedAmount = toDecimal128(allocResult.allocatedAmount);
+            payment.advanceAmount = toDecimal128(allocResult.advanceAmount);
+            await payment.save({ session: dbSession });
 
 
-  static getCurrentSession() {
-    const currentYear = new Date().getFullYear();
-    return `${currentYear}-${currentYear + 1}`;
-  }
+            // 7. Advance balance if leftover
+            if (allocResult.advanceAmount.gt(0)) {
+                await this._creditAdvance(
+                    studentId, allocResult.advanceAmount, payment._id,
+                    transactionId, userId, currentSession, dbSession
+                );
+            }
 
-  static async autoApplyAdvanceBalance(studentId, userId) {
-    const session = await mongoose.startSession();
+            // 8. Summary update
+            //    Payment increases credit → reduces dueBalance
+            //    Advance credit increases advanceBalance (already counted via advanceUsed?)
+            await StudentFinanceSummaryService.recordMovement({
+                student: studentId,
+                session: currentSession,
+                transactionId,
+                type: 'payment',
+                credit: toDecimal128(payAmount),
+                refModel: 'Payment',
+                refId: payment._id,
+                description: `Payment received via ${method}`,
+                createdBy: userId,
+                summaryDelta: {
+                    paid: allocResult.allocatedAmount,
+                    advanceBalance: allocResult.advanceAmount,
+                },
+            }, dbSession);
 
-    try {
-        session.startTransaction();
+            // 🔵 AUDIT — payment received
+            await AuditService.record({
+                action: 'payment.received',
+                actor: userId,
+                student: studentId,
+                refModel: 'Payment',
+                refId: payment._id,
+                refNumber: payment.receiptNumber,
+                after: {
+                    amount: payment.amount.toString(),
+                    method: payment.method,
+                    allocated: payment.allocatedAmount.toString(),
+                    advance: payment.advanceAmount.toString(),
+                    session: currentSession,
+                },
+                session: currentSession,
+                transactionId,
+                notes,
+            }, dbSession);
 
-        const advanceBalance = await AdvanceBalance.findOne({ student: studentId }).session(session);
-        if (!advanceBalance || advanceBalance.amount <= 0) {
-            await session.commitTransaction();
-            return { applied: false, message: 'No advance balance available' };
+            await TransactionService.completeTransaction(transactionId, {
+                paymentId: payment._id,
+                allocations: allocResult.allocations.length,
+                advanceAmount: allocResult.advanceAmount.toString(),
+            });
+
+            await dbSession.commitTransaction();
+
+            // 🔔 Notify parent (fire-and-forget; failures don't roll back the payment)
+            try {
+                const [student, summary] = await Promise.all([
+                    Student.findById(studentId)
+                        .populate('parent', 'name email phone')
+                        .lean(),
+                    StudentFinanceSummaryService.getSummary(studentId, currentSession),
+                ]);
+
+                const token = signReceiptToken(payment._id);
+                await NotificationService.notifyPaymentReceived({
+                    payment,
+                    summary: {
+                        studentName: student?.name,
+                        parentName: student?.parent?.name,
+                        parentEmail: student?.parent?.email,
+                        parentPhone: student?.parent?.phone,
+                        dueBalance: summary?.dueBalance,
+                    },
+                    receiptUrl: `${process.env.PUBLIC_URL}/api/s2/public/receipts/${token}`,
+                });
+            } catch (err) {
+                // Notification failure must never break a completed payment
+                console.error('[payment] notification failed', err);
+            }
+
+            return {
+                payment,
+                allocations: allocResult.allocations,
+                advanceAmount: allocResult.advanceAmount,
+                idempotent: false,
+            };
+
+        } catch (e) {
+            if (e.code === 11000 && idempotencyKey) {
+                const existing = await Payment.findOne({ idempotencyKey }).session(dbSession);
+                await dbSession.commitTransaction();
+                return { payment: existing, allocations: [], advanceAmount: 0, idempotent: true };
+            }
+            throw e;
+        } finally {
+            dbSession.endSession();
         }
+    }
+
+    /**
+     * Allocate payment against fees — oldest overdue first.
+     * All math via decimal.js.
+     */
+    static async _allocate(studentId, amount, paymentId, transactionId, userId, sessionYear, dbSession) {
+        let remaining = toDecimal(amount);
+        const allocations = [];
+        let allocatedAmount = toDecimal(0);
 
         const fees = await FeeInstance.find({
             student: studentId,
             status: { $in: ['unpaid', 'partial', 'overdue'] },
-            dueAmount: { $gt: 0 },
-            isActive: true
+            session: sessionYear,
+            isActive: true,
         })
-            .sort({ dueDate: 1 })
-            .session(session);
-
-        let remainingAdvance = advanceBalance.amount;
-        const appliedFees = [];
+            .sort({ dueDate: 1, createdAt: 1 })
+            .session(dbSession);
 
         for (const fee of fees) {
-            if (remainingAdvance <= 0) break;
+            if (remaining.lte(0)) break;
 
-            const applicableAmount = Math.min(fee.dueAmount, remainingAdvance);
+            const dueNow = toDecimal(fee.dueAmount);
+            if (dueNow.lte(0)) continue;
 
-            if (applicableAmount > 0) {
-                // Use the extracted core logic
-                const result = await this.applyAdvanceCore(
-                    studentId,
-                    fee._id,
-                    applicableAmount,
-                    userId,
-                    session // Pass the session, don't create new one
-                );
+            const take = min(dueNow, remaining);
 
-                remainingAdvance -= applicableAmount;
-                appliedFees.push({
-                    feeInstanceId: fee._id,
-                    amount: applicableAmount
-                });
-            }
+            // Update fee atomically
+            fee.paidAmount = toDecimal128(toDecimal(fee.paidAmount).plus(take));
+            fee.recalculate();
+            await fee.save({ session: dbSession });
+
+            // Allocation record
+            const [allocation] = await PaymentAllocation.create([{
+                payment: paymentId,
+                feeInstance: fee._id,
+                student: studentId,
+                amount: toDecimal128(take),
+                allocatedBy: userId,
+                transactionId,
+                session: sessionYear,
+            }], { session: dbSession });
+
+            fee.paymentAllocations.push(allocation._id);
+            await fee.save({ session: dbSession });
+
+            allocations.push(allocation);
+            allocatedAmount = allocatedAmount.plus(take);
+            remaining = remaining.minus(take);
         }
-
-        await session.commitTransaction();
 
         return {
-            applied: appliedFees.length > 0,
-            appliedFees,
-            totalApplied: advanceBalance.amount - remainingAdvance,
-            remainingAdvance
+            allocations,
+            allocatedAmount,
+            advanceAmount: remaining,
         };
-
-    } catch (error) {
-        await session.abortTransaction();
-        throw error;
-    } finally {
-        session.endSession();
     }
-}
 
-// EXTRACTED CORE LOGIC - Used by both standalone and batch operations
-static async applyAdvanceCore(studentId, feeInstanceId, amount, userId, dbSession) {
-    const transactionId = await TransactionService.createTransactionId('advance_debit', userId);
-
-    try {
-        await TransactionService.beginTransaction(transactionId, 'advance_debit', {
-            userId,
-            studentId,
-            feeInstanceId,
-            amount
-        });
-
-        // Get advance balance WITHIN the same session
-        let advanceBalance = await AdvanceBalance.findOne({ student: studentId }).session(dbSession);
-        
-        if (!advanceBalance) {
-            throw new Error('No advance balance found');
-        }
-
-        if (advanceBalance.amount < amount) {
-            throw new Error(`Insufficient advance balance. Available: ${advanceBalance.amount}, Requested: ${amount}`);
-        }
-
-        // Get fee instance
-        const feeInstance = await FeeInstance.findById(feeInstanceId).session(dbSession);
-        if (!feeInstance) throw new Error('Fee instance not found');
-
-        if (feeInstance.student.toString() !== studentId) {
-            throw new Error('Fee instance does not belong to student');
-        }
-
-        // Update fee instance
-        feeInstance.advanceUsed += amount;
-        feeInstance.dueAmount = feeInstance.totalAmount - feeInstance.paidAmount - feeInstance.waivedAmount - feeInstance.advanceUsed;
-
-        if (feeInstance.dueAmount <= 0) {
-            feeInstance.status = 'paid';
-            feeInstance.paidDate = new Date();
-        }
-
-        await feeInstance.save({ session: dbSession });
-
-        // Update advance balance
-        const previousBalance = advanceBalance.amount;
-        const newBalance = previousBalance - amount;
-
-        advanceBalance.amount = newBalance;
-        advanceBalance.lastUpdated = new Date();
-
-        advanceBalance.transactions.push({
-            type: 'debit',
-            amount: amount,
-            previousBalance: previousBalance,
-            newBalance: newBalance,
-            feeInstanceId: feeInstanceId,
-            transactionId: transactionId,
-            description: `Advance used for fee: ${feeInstance.feeTemplate}`,
-            createdAt: new Date()
-        });
-
-        await advanceBalance.save({ session: dbSession });
-
-        // Create ledger entry
-        await LedgerService.createEntry({
-            student: studentId,
-            transactionId: transactionId,
-            type: 'advance_debit',
-            debit: amount,
-            refModel: 'FeeInstance',
-            refId: feeInstance._id,
-            description: `Advance balance used for fee`,
-            createdBy: userId,
-            session: feeInstance.session
-        }, dbSession);
-
-        await TransactionService.completeTransaction(transactionId, {
-            feeInstanceId: feeInstanceId,
-            amountUsed: amount,
-            remainingAdvance: newBalance
-        });
-
-        return {
-            feeInstance,
-            advanceBalance,
-            amountUsed: amount,
-            remainingAdvance: newBalance
-        };
-
-    } catch (error) {
-        await TransactionService.failTransaction(transactionId, error);
-        throw error;
-    }
-}
-
-// MODIFIED useAdvanceBalance to use the core logic
-static async useAdvanceBalance(studentId, feeInstanceId, amount, userId) {
-    const session = await mongoose.startSession();
-
-    try {
-        session.startTransaction();
-
-        const result = await this.applyAdvanceCore(
-            studentId,
-            feeInstanceId,
-            amount,
-            userId,
-            session
+    /**
+     * Credit advance balance — atomic.
+     */
+    static async _creditAdvance(studentId, amount, paymentId, transactionId, userId, sessionYear, dbSession) {
+        const updated = await AdvanceBalance.findOneAndUpdate(
+            { student: studentId, session: sessionYear },
+            {
+                $inc: { amount: toDecimal128(amount) },
+                $set: { lastUpdated: new Date() },
+                $push: {
+                    transactions: {
+                        type: 'credit',
+                        amount: toDecimal128(amount),
+                        paymentId,
+                        transactionId,
+                        description: `Advance from payment ${paymentId}`,
+                        createdAt: new Date(),
+                    },
+                },
+            },
+            { upsert: true, new: true, session: dbSession }
         );
 
-        await session.commitTransaction();
-        return result;
-
-    } catch (error) {
-        await session.abortTransaction();
-        throw error;
-    } finally {
-        session.endSession();
+        return updated;
     }
-}
-  // new service method ends here
 
-  // FIX getStudentAdvanceBalance method
-  static async getStudentAdvanceBalance(studentId) {
-    try {
-      console.log('Getting advance balance for student:', studentId);
-
-      let advanceBalance = await AdvanceBalance.findOne({ student: studentId })
-        .select('amount currency lastUpdated transactions')
-        .lean();
-
-      console.log('Found advance balance:', advanceBalance);
-
-      // If no advance balance exists, create default structure
-      if (!advanceBalance) {
-        console.log('No advance balance found, creating default');
-        advanceBalance = {
-          amount: 0,
-          currency: 'BDT',
-          lastUpdated: new Date(),
-          transactions: []
-        };
-      }
-
-      return advanceBalance;
-    } catch (error) {
-      console.error('Error getting advance balance:', error);
-      throw error;
+    static async getPaymentAllocations(paymentId) {
+        return PaymentAllocation.find({ payment: paymentId })
+            .populate('feeInstance', 'title totalAmount dueAmount status')
+            .lean();
     }
-  }
 
-  // Add helper method to PaymentService.js
-  static async getStudentSession(studentId) {
-    const student = await Student.findById(studentId).select('session');
-    return student?.session || this.getCurrentSession();
-  }
+    static async getStudentAdvanceBalance(studentId, sessionYear) {
+        const doc = await AdvanceBalance.findOne({ student: studentId, session: sessionYear }).lean();
+        return doc || { amount: 0, currency: 'BDT', transactions: [] };
+    }
 
+    static async getPaymentHistory(studentId, sessionYear, limit = 50) {
+        return Payment.find({ student: studentId, session: sessionYear })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('receivedBy', 'name email')
+            .lean();
+    }
 
+    // services/PaymentService.js — add this method
+
+    static async voidPayment(paymentId, reason, userId) {
+        const dbSession = await mongoose.startSession();
+
+        try {
+            dbSession.startTransaction();
+
+            const payment = await Payment.findById(paymentId).session(dbSession);
+            if (!payment) throw new Error('Payment not found');
+            if (payment.status === 'voided') throw new Error('Payment already voided');
+            if (payment.status === 'reversed') throw new Error('Payment already reversed');
+            if (toDecimal(payment.refundedAmount).gt(0)) {
+                throw new Error('Cannot void a payment that has been refunded');
+            }
+
+            const transactionId = await TransactionService.createTransactionId('payment_void', userId);
+            await TransactionService.beginTransaction(transactionId, 'payment_void', {
+                userId, paymentId, reason,
+            });
+
+            const amount = toDecimal(payment.amount);
+            const session = payment.session;
+
+            // Reverse all active allocations
+            const allocations = await PaymentAllocation
+                .find({ payment: paymentId, isReversed: false })
+                .session(dbSession);
+
+            for (const alloc of allocations) {
+                const fee = await FeeInstance.findById(alloc.feeInstance).session(dbSession);
+                if (!fee) continue;
+
+                const allocAmount = toDecimal(alloc.amount);
+                fee.paidAmount = toDecimal128(toDecimal(fee.paidAmount).minus(allocAmount));
+                fee.recalculate();
+                await fee.save({ session: dbSession });
+
+                alloc.isReversed = true;
+                alloc.reversalTransactionId = transactionId;
+                alloc.reversalReason = `Voided: ${reason}`;
+                alloc.reversedAt = new Date();
+                alloc.reversedBy = userId;
+                await alloc.save({ session: dbSession });
+            }
+
+            // Reverse advance balance if any was credited
+            const advanceAmount = toDecimal(payment.advanceAmount);
+            if (advanceAmount.gt(0)) {
+                const updated = await AdvanceBalance.findOneAndUpdate(
+                    { student: payment.student, session, amount: { $gte: toDecimal128(advanceAmount) } },
+                    {
+                        $inc: { amount: toDecimal128(advanceAmount.negated()) },
+                        $set: { lastUpdated: new Date() },
+                        $push: {
+                            transactions: {
+                                type: 'debit',
+                                amount: toDecimal128(advanceAmount),
+                                paymentId: payment._id,
+                                transactionId,
+                                description: `Void of payment ${payment._id}`,
+                                createdAt: new Date(),
+                            },
+                        },
+                    },
+                    { new: true, session: dbSession }
+                );
+                if (!updated) {
+                    throw new Error('Cannot void: advance balance already spent');
+                }
+            }
+
+            // Mark payment voided
+            payment.status = 'voided';
+            payment.voidedAt = new Date();
+            payment.voidedBy = userId;
+            payment.voidReason = reason;
+            await payment.save({ session: dbSession });
+
+            const allocAmount = toDecimal(payment.allocatedAmount);
+            const advAmount = toDecimal(payment.advanceAmount);
+
+            await StudentFinanceSummaryService.recordMovement({
+                student: payment.student,
+                session,
+                transactionId,
+                type: 'adjustment',
+                debit: toDecimal128(allocAmount),        // ← was amount
+                refModel: 'Payment',
+                refId: payment._id,
+                description: `Void of payment ${payment.receiptNumber}: ${reason}`,
+                createdBy: userId,
+                summaryDelta: {
+                    paid: allocAmount.negated(),         // ← was amount
+                    advanceBalance: advAmount.negated(),
+                },
+            }, dbSession);
+
+            await AuditService.record({
+                action: 'payment.voided',
+                actor: userId,
+                student: payment.student,
+                refModel: 'Payment',
+                refId: payment._id,
+                refNumber: payment.receiptNumber,
+                before: {
+                    status: 'completed',
+                    amount: payment.amount.toString(),
+                    allocated: payment.allocatedAmount.toString(),
+                },
+                after: {
+                    status: 'voided',
+                    reason,
+                },
+                session,
+                transactionId,
+                reason,
+            }, dbSession);
+
+            // // Reverse summary + ledger: this payment's credit goes away
+            // await StudentFinanceSummaryService.recordMovement({
+            //     student: payment.student,
+            //     session,
+            //     transactionId,
+            //     type: 'adjustment',
+            //     debit: toDecimal128(amount),
+            //     refModel: 'Payment',
+            //     refId: payment._id,
+            //     description: `Void of payment ${payment.receiptNumber}: ${reason}`,
+            //     createdBy: userId,
+            //     summaryDelta: {
+            //         paid: amount.negated(),
+            //         advanceBalance: advanceAmount.negated(),
+            //     },
+            // }, dbSession);
+
+            await TransactionService.completeTransaction(transactionId, {
+                paymentId: payment._id,
+                voidedAmount: amount.toString(),
+                reversedAllocations: allocations.length,
+            });
+
+            await dbSession.commitTransaction();
+
+            return {
+                payment,
+                reversedAllocations: allocations.length,
+                voidedAmount: amount,
+            };
+
+        } catch (error) {
+            await dbSession.abortTransaction();
+            throw error;
+        } finally {
+            dbSession.endSession();
+        }
+    }
 }
 
 module.exports = PaymentService;
-
-  // these are working drafts for autoApplyAdvanceBalance and useAdvanceBalance methods
-  // replace the existing ones with these improved versions (for session duplicates issue)
-  // static async autoApplyAdvanceBalance(studentId, userId) {
-  //   const session = await mongoose.startSession();
-
-  //   try {
-  //     session.startTransaction();
-
-  //     const advanceBalance = await AdvanceBalance.findOne({ student: studentId }).session(session);
-  //     if (!advanceBalance || advanceBalance.amount <= 0) {
-  //       return { applied: false, message: 'No advance balance available' };
-  //     }
-
-  //     const fees = await FeeInstance.find({
-  //       student: studentId,
-  //       status: { $in: ['unpaid', 'partial', 'overdue'] },
-  //       dueAmount: { $gt: 0 },
-  //       isActive: true
-  //     })
-  //       .sort({ dueDate: 1 })
-  //       .session(session);
-
-  //     let remainingAdvance = advanceBalance.amount;
-  //     const appliedFees = [];
-
-  //     for (const fee of fees) {
-  //       if (remainingAdvance <= 0) break;
-
-  //       const applicableAmount = Math.min(fee.dueAmount, remainingAdvance);
-
-  //       if (applicableAmount > 0) {
-  //         await this.useAdvanceBalance(
-  //           studentId,
-  //           fee._id,
-  //           applicableAmount,
-  //           userId
-  //         );
-
-  //         remainingAdvance -= applicableAmount;
-  //         appliedFees.push({
-  //           feeInstanceId: fee._id,
-  //           amount: applicableAmount
-  //         });
-  //       }
-  //     }
-
-  //     await session.commitTransaction();
-
-  //     return {
-  //       applied: appliedFees.length > 0,
-  //       appliedFees,
-  //       totalApplied: advanceBalance.amount - remainingAdvance,
-  //       remainingAdvance
-  //     };
-
-  //   } catch (error) {
-  //     await session.abortTransaction();
-  //     throw error;
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // };
-
-  //   // Also fix useAdvanceBalance method 
-  // static async useAdvanceBalance(studentId, feeInstanceId, amount, userId) {
-  //   const session = await mongoose.startSession();
-
-  //   try {
-  //     session.startTransaction();
-  //     console.log('Using advance balance:', { studentId, feeInstanceId, amount });
-
-  //     const transactionId = await TransactionService.createTransactionId('advance_debit', userId);
-
-  //     await TransactionService.beginTransaction(transactionId, 'advance_debit', {
-  //       userId,
-  //       studentId,
-  //       feeInstanceId,
-  //       amount
-  //     });
-
-  //     // Get or create advance balance
-  //     let advanceBalance = await AdvanceBalance.findOne({ student: studentId }).session(session);
-
-  //     if (!advanceBalance) {
-  //       console.log('Creating new advance balance for student');
-  //       advanceBalance = new AdvanceBalance({
-  //         student: studentId,
-  //         amount: 0,
-  //         currency: 'BDT',
-  //         session: await this.getStudentSession(studentId), // Helper method needed
-  //         transactions: []
-  //       });
-  //     }
-
-  //     console.log('Current advance balance:', advanceBalance.amount);
-
-  //     if (advanceBalance.amount < amount) {
-  //       throw new Error(`Insufficient advance balance. Available: ${advanceBalance.amount}, Requested: ${amount}`);
-  //     }
-
-  //     // Get fee instance
-  //     const feeInstance = await FeeInstance.findById(feeInstanceId).session(session);
-  //     if (!feeInstance) throw new Error('Fee instance not found');
-
-  //     if (feeInstance.student.toString() !== studentId) {
-  //       throw new Error('Fee instance does not belong to student');
-  //     }
-
-  //     // Update fee instance
-  //     feeInstance.advanceUsed += amount;
-  //     feeInstance.dueAmount = feeInstance.totalAmount - feeInstance.paidAmount - feeInstance.waivedAmount - feeInstance.advanceUsed;
-
-  //     if (feeInstance.dueAmount <= 0) {
-  //       feeInstance.status = 'paid';
-  //       feeInstance.paidDate = new Date();
-  //     }
-
-  //     await feeInstance.save({ session });
-
-  //     // Update advance balance
-  //     const previousBalance = advanceBalance.amount;
-  //     const newBalance = previousBalance - amount;
-
-  //     advanceBalance.amount = newBalance;
-  //     advanceBalance.lastUpdated = new Date();
-
-  //     advanceBalance.transactions.push({
-  //       type: 'debit',
-  //       amount: amount,
-  //       previousBalance: previousBalance,
-  //       newBalance: newBalance,
-  //       feeInstanceId: feeInstanceId,
-  //       transactionId: transactionId,
-  //       description: `Advance used for fee: ${feeInstance.feeTemplate}`,
-  //       createdAt: new Date()
-  //     });
-
-  //     await advanceBalance.save({ session });
-
-  //     // Create ledger entry
-  //     await LedgerService.createEntry({
-  //       student: studentId,
-  //       transactionId: transactionId,
-  //       type: 'advance_debit',
-  //       debit: amount,
-  //       refModel: 'FeeInstance',
-  //       refId: feeInstance._id,
-  //       description: `Advance balance used for fee`,
-  //       createdBy: userId,
-  //       session: feeInstance.session
-  //     }, session);
-
-  //     await TransactionService.completeTransaction(transactionId, {
-  //       feeInstanceId: feeInstanceId,
-  //       amountUsed: amount,
-  //       remainingAdvance: newBalance
-  //     });
-
-  //     await session.commitTransaction();
-  //     console.log('Advance balance used successfully');
-
-  //     return {
-  //       feeInstance,
-  //       advanceBalance,
-  //       amountUsed: amount,
-  //       remainingAdvance: newBalance
-  //     };
-
-  //   } catch (error) {
-  //     await session.abortTransaction();
-  //     console.error('Error using advance balance:', error);
-
-  //     if (error.transactionId) {
-  //       await TransactionService.failTransaction(error.transactionId, error);
-  //     }
-
-  //     throw error;
-  //   } finally {
-  //     session.endSession();
-  //   }
-  // }

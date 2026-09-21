@@ -1,5 +1,6 @@
 // models/InstallmentPlan.js
 const mongoose = require('mongoose');
+const { moneyPlugin, Decimal128 } = require('../../utils/moneySchemaPlugin');
 
 const installmentPlanSchema = new mongoose.Schema({
     // Plan Identification
@@ -18,7 +19,7 @@ const installmentPlanSchema = new mongoose.Schema({
     
     // Financial Details
     totalAmount: {
-        type: Number,
+        type: Decimal128,
         required: true,
         min: 0
     },
@@ -30,12 +31,12 @@ const installmentPlanSchema = new mongoose.Schema({
     },
     downPayment: {
         amount: {
-            type: Number,
+            type: Decimal128,
             default: 0,
             min: 0
         },
         percentage: {
-            type: Number,
+            type: Decimal128,
             default: 0,
             min: 0,
             max: 100
@@ -53,7 +54,7 @@ const installmentPlanSchema = new mongoose.Schema({
             required: true
         },
         amount: {
-            type: Number,
+            type: Decimal128,
             required: true,
             min: 0
         },

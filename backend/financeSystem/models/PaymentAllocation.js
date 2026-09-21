@@ -1,12 +1,12 @@
 // models/PaymentAllocation.js - CRITICAL
 const mongoose = require('mongoose');
+const { moneyPlugin, Decimal128 } = require('../../utils/moneySchemaPlugin');
 
 const paymentAllocationSchema = new mongoose.Schema({
     payment: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Payment',
         required: true,
-        index: true
     },
     feeInstance: {
         type: mongoose.Schema.Types.ObjectId,
@@ -21,7 +21,7 @@ const paymentAllocationSchema = new mongoose.Schema({
         index: true
     },
     amount: {
-        type: Number,
+        type: Decimal128,
         required: true,
         min: 0
     },
@@ -42,6 +42,7 @@ const paymentAllocationSchema = new mongoose.Schema({
         type: Boolean,
         default: false
     },
+    reversedAmount: { type: Decimal128, default: 0 },
     reversalTransactionId: String,
     reversalReason: String,
     reversedAt: Date,

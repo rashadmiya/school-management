@@ -1,5 +1,7 @@
 // UPDATED models/LedgerEntry.js
 const mongoose = require('mongoose');
+const { moneyPlugin, Decimal128 } = require('../../utils/moneySchemaPlugin');
+
 
 const ledgerEntrySchema = new mongoose.Schema({
     // Core references
@@ -22,22 +24,22 @@ const ledgerEntrySchema = new mongoose.Schema({
     },
     // Amount fields
     debit: {
-        type: Number,
+        type: Decimal128,
         default: 0,
         min: 0
     },
     credit: {
-        type: Number,
+        type: Decimal128,
         default: 0,
         min: 0
     },
     // Balance tracking
     previousBalance: {
-        type: Number,
+        type: Decimal128,
         required: true
     },
     balanceAfter: {
-        type: Number,
+        type: Decimal128,
         required: true
     },
     // References

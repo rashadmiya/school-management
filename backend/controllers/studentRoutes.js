@@ -1,4 +1,7 @@
 const express = require("express");
+const ParentService = require('../services/ParentService');
+const mongoose = require('mongoose');
+
 const fs = require("fs")
 const Student = require("../models/Student");
 const Parent = require("../models/Parent");
@@ -17,109 +20,94 @@ const Class = require("../models/Class");
 const AssignmentSubmission = require("../models/AssignmentSubmission");
 const { upload } = require("../multer");
 const path = require("path");
+const StudentFinanceSummaryService = require("../services/StudentFinanceSummaryService");
+const BillService = require("../financeSystem/services/BillService");
+const PaymentService = require("../services/PaymentService");
+const FeeService = require("../services/FeeService");
+const { getCurrentSession } = require("../utils/accademicSession");
+
 const router = express.Router();
+
+
+/* ============================================================
+ *  STUDENT CREATION
+ * ============================================================ */
+
+// Helper — handles parent linking/creation for both create routes.
+async function resolveParent({ parentId, guardianContact, fathersName, mothersName, email, altPhone, address }, studentId) {
+  if (parentId) {
+    const parent = await ParentService.linkExisting(parentId, studentId);
+    return { parent, tempPin: null };
+  }
+  if (guardianContact) {
+    return await ParentService.attachToStudent(
+      {
+        phone: guardianContact,
+        name: fathersName || mothersName || 'Guardian',
+        email,
+        altPhone,
+        address,
+      },
+      studentId
+    );
+  }
+  return { parent: null, tempPin: null };
+}
+
 
 // ==================== STUDENT CREATION ENDPOINTS ====================
 
-// ✅ OPTION 1: Create Student WITHOUT Photo (Simple)
+// ✅ OPTION 1: Create Student WITHOUT Photo
 router.post(
   "/register",
   isAuthenticated,
   authorizeRoles("admin", "teacher"),
   async (req, res, next) => {
-    let user; // For cleanup scope
-
     try {
       const {
-        name,
-        rollNumber,
-        password = "123456",
-        classId,
-        parentId,
-        gender,
-        session,
-        birthRegNo,
-        fathersName,
-        mothersName,
-        guardianContact,
-        religion,
-        isPhysicallyDisabled = false,
-        disabilityDescription,
-        lastExamResult,
-        dateOfBirth,
-        feeCategory = 'regular',
-        transportRoute,
-        outstandingBalance = 0,
-        financialNotes
+        name, rollNumber, password = "123456", classId, parentId,
+        gender, session, birthRegNo, fathersName, mothersName,
+        guardianContact, religion,
+        isPhysicallyDisabled = false, disabilityDescription,
+        lastExamResult, dateOfBirth,
+        feeCategory = 'regular', transportRoute,
+        financialNotes,
       } = req.body;
 
-      // Validation for required fields
-      if (!session) {
-        return next(new ErrorHandler("Session is required", 400));
-      }
+      if (!session) return next(new ErrorHandler("Session is required", 400));
 
-      // Check for duplicate roll number
       const existing = await Student.findOne({ rollNumber });
-      if (existing) {
-        return next(new ErrorHandler("Roll number already exists", 400));
-      }
+      if (existing) return next(new ErrorHandler("Roll number already exists", 400));
 
-      // ✅ Make parent optional: only validate if parentId is provided
-      let parentObjectId = null;
-      if (parentId) {
-        const parent = await Parent.findById(parentId);
-        if (parent) {
-          parentObjectId = parent._id;
-        } else {
-          // Optionally log or ignore; you can also throw a warning
-          console.warn(`Parent with ID ${parentId} not found, skipping association.`);
-        }
-      }
-
-      // Check if class exists (if provided)
       if (classId) {
         const classExists = await Class.findById(classId);
-        if (!classExists) {
-          return next(new ErrorHandler("Class not found", 404));
-        }
+        if (!classExists) return next(new ErrorHandler("Class not found", 404));
       }
 
-      // Prepare lastExamResult object
       let formattedLastExamResult = null;
       if (lastExamResult) {
         formattedLastExamResult = {
           examName: lastExamResult.examName || '',
           achievedMarks: lastExamResult.achievedMarks || '',
-          totalMarks: lastExamResult.totalMarks || ''
+          totalMarks: lastExamResult.totalMarks || '',
         };
       }
 
-      // Create student WITHOUT photo
+      // Create student WITHOUT parent (ParentService will set it)
       const student = await Student.create({
-        name,
-        rollNumber,
-        password,
-        class: classId,
-        parent: parentObjectId, // Will be null if no parent or not found
-        gender,
-        session,
-        birthRegNo,
-        fathersName,
-        mothersName,
-        guardianContact,
-        religion,
+        name, rollNumber, password,
+        class: classId || null,
+        parent: null,
+        gender, session, birthRegNo, fathersName, mothersName,
+        guardianContact, religion,
         isPhysicallyDisabled,
         disabilityDescription: isPhysicallyDisabled ? disabilityDescription : '',
         lastExamResult: formattedLastExamResult,
-        dateOfBirth,
-        feeCategory,
-        transportRoute,
-        outstandingBalance,
+        dateOfBirth, feeCategory, transportRoute,
         financialNotes,
-        isStudent: true
+        isStudent: true,
       });
 
-      // 🔹 Assign the student to the class (if classId provided)
       if (classId) {
         await Class.findByIdAndUpdate(
           classId,
@@ -128,323 +116,138 @@ router.post(
         );
       }
 
-      // 🔹 Update parent's children array (only if parentObjectId exists)
-      if (parentObjectId) {
-        await Parent.findByIdAndUpdate(
-          parentObjectId,
-          { $addToSet: { children: student._id } },
-          { new: true }
-        );
-      }
+      // Resolve parent (link existing or auto-create)
+      const { parent, tempPin } = await resolveParent(
+        { parentId, guardianContact, fathersName, mothersName },
+        student._id
+      );
 
-      // Send response
-      sendStudentToken(student, 201, res);
+      const populated = await Student.findById(student._id)
+        .populate('class', 'name section')
+        .populate('parent', 'name phone email')
+        .populate('grade', 'name level')
+        .select('-password');
+
+      const token = student.getJwtToken();
+
+      res.status(201).json({
+        success: true,
+        message: 'Student created successfully',
+        token,
+        student: populated,
+        studentId: student._id,
+        hasParent: !!parent,
+        parent: parent ? {
+          _id: parent._id,
+          name: parent.name,
+          phone: parent.phone,
+        } : null,
+        // Plaintext temp PIN — show ONCE to admin, relay to parent
+        tempPin,
+      });
     } catch (error) {
       console.error("Student registration error:", error);
-
-      // Handle validation errors
       if (error.name === 'ValidationError') {
-        const messages = Object.values(error.errors).map(val => val.message);
+        const messages = Object.values(error.errors).map(v => v.message);
         return next(new ErrorHandler(messages.join(', '), 400));
       }
-
-      // Handle duplicate key error
       if (error.code === 11000) {
         const field = Object.keys(error.keyPattern)[0];
         return next(new ErrorHandler(`${field} already exists`, 400));
       }
-
       next(error);
     }
   }
 );
 
-// router.post("/register",
-//   isAuthenticated,
-//   authorizeRoles("admin", "teacher"),
-//   async (req, res, next) => {
-//     let user; // For cleanup scope
-
-//     try {
-//       const {
-//         name,
-//         rollNumber,
-//         password = "123456",
-//         classId,
-//         // gradeId,
-//         parentId,
-//         gender,
-//         // New fields
-//         session,
-//         birthRegNo,
-//         fathersName,
-//         mothersName,
-//         guardianContact,
-//         religion,
-//         isPhysicallyDisabled = false,
-//         disabilityDescription,
-//         lastExamResult,
-//         dateOfBirth,
-//         feeCategory = 'regular',
-//         transportRoute,
-//         outstandingBalance = 0,
-//         financialNotes
-//         // Note: No photo field
-//       } = req.body;
-
-//       // Validation for required fields
-//       if (!session) {
-//         return next(new ErrorHandler("Session is required", 400));
-//       }
-
-//       // Check for duplicate roll number
-//       const existing = await Student.findOne({ rollNumber });
-//       if (existing) {
-//         return next(new ErrorHandler("Roll number already exists", 400));
-//       }
-
-//       // Check if parent exists
-//       const parent = await Parent.findById(parentId);
-//       if (!parent) {
-//         return next(new ErrorHandler("Parent not found", 404));
-//       }
-
-//       // Check if class exists
-//       if (classId) {
-//         const classExists = await Class.findById(classId);
-//         if (!classExists) {
-//           return next(new ErrorHandler("Class not found", 404));
-//         }
-//       }
-
-//       // Prepare lastExamResult object
-//       let formattedLastExamResult = null;
-//       if (lastExamResult) {
-//         formattedLastExamResult = {
-//           examName: lastExamResult.examName || '',
-//           achievedMarks: lastExamResult.achievedMarks || '',
-//           totalMarks: lastExamResult.totalMarks || ''
-//         };
-//       }
-
-//       // Create student WITHOUT photo
-//       const student = await Student.create({
-//         name,
-//         rollNumber,
-//         password,
-//         class: classId,
-//         parent: parentId,
-//         // grade: gradeId,
-//         gender,
-//         // New fields
-//         session,
-//         birthRegNo,
-//         fathersName,
-//         mothersName,
-//         guardianContact,
-//         religion,
-//         isPhysicallyDisabled,
-//         disabilityDescription: isPhysicallyDisabled ? disabilityDescription : '',
-//         lastExamResult: formattedLastExamResult,
-//         // Additional fields
-//         dateOfBirth,
-//         feeCategory,
-//         transportRoute,
-//         outstandingBalance,
-//         financialNotes,
-//         isStudent: true
-//       });
-
-//       // 🔹 Assign the student to the class
-//       if (classId) {
-//         await Class.findByIdAndUpdate(
-//           classId,
-//           { $addToSet: { students: student._id } },
-//           { new: true }
-//         );
-//       }
-
-//       // 🔹 Update parent's children array
-//       await Parent.findByIdAndUpdate(
-//         parentId,
-//         { $addToSet: { children: student._id } },
-//         { new: true }
-//       );
-
-//       // Send response
-//       sendStudentToken(student, 201, res);
-
-//     } catch (error) {
-//       console.error("Student registration error:", error);
-
-//       // Handle validation errors
-//       if (error.name === 'ValidationError') {
-//         const messages = Object.values(error.errors).map(val => val.message);
-//         return next(new ErrorHandler(messages.join(', '), 400));
-//       }
-
-//       // Handle duplicate key error
-//       if (error.code === 11000) {
-//         const field = Object.keys(error.keyPattern)[0];
-//         return next(new ErrorHandler(`${field} already exists`, 400));
-//       }
-
-//       next(error);
-//     }
-//   }
-// );
-
+// ✅ OPTION 2: Create Student WITH Photo
 router.post(
   "/register-with-photo",
   isAuthenticated,
   authorizeRoles("admin", "teacher"),
   upload.single('photo'),
   async (req, res, next) => {
-    let user; // For cleanup scope
-
     try {
-      // Parse form data
       const {
-        name,
-        rollNumber,
-        password = "123456",
-        classId,
-        parentId, // Could be empty string or undefined
-        gender,
-        session,
-        birthRegNo,
-        fathersName,
-        mothersName,
-        guardianContact,
-        religion,
-        isPhysicallyDisabled = "false",
-        disabilityDescription,
-        lastExamResult,
-        dateOfBirth,
-        feeCategory = 'regular',
-        transportRoute,
-        outstandingBalance = "0",
-        financialNotes
+        name, rollNumber, password = "123456", classId, parentId,
+        gender, session, birthRegNo, fathersName, mothersName,
+        guardianContact, religion,
+        isPhysicallyDisabled = "false", disabilityDescription,
+        lastExamResult, dateOfBirth,
+        feeCategory = 'regular', transportRoute,
+        financialNotes,
       } = req.body;
 
-      // Clean up parentId - handle empty string or "undefined" string
-      let cleanedParentId = parentId && parentId.trim() !== "" && parentId !== "undefined"
-        ? parentId
-        : null;
+      const cleanedParentId = parentId && parentId.trim() !== "" && parentId !== "undefined"
+        ? parentId : null;
 
-      // Parse boolean and number values
       const parsedIsPhysicallyDisabled = isPhysicallyDisabled === 'true';
-      const parsedOutstandingBalance = parseFloat(outstandingBalance) || 0;
 
-      // Validation for required fields
       if (!session) {
-        if (req.file?.path && fs.existsSync(req.file.path)) {
-          fs.unlinkSync(req.file.path);
-        }
+        if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
         return next(new ErrorHandler("Session is required", 400));
       }
 
-      // Validate photo if uploaded
       let photoPath = null;
       if (req.file) {
         const allowedTypes = ['image/jpeg', 'image/png', 'image/jpg', 'image/webp'];
         if (!allowedTypes.includes(req.file.mimetype)) {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
           return next(new ErrorHandler("Please upload a valid image (JPEG, PNG, WebP)", 400));
         }
-
-        const maxSize = 5 * 1024 * 1024;
-        if (req.file.size > maxSize) {
+        if (req.file.size > 5 * 1024 * 1024) {
+          if (fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
           return next(new ErrorHandler("Image size should be less than 5MB", 400));
         }
-
         photoPath = `/uploads/avatars/students/${req.file.filename}`;
       }
 
-      // Check for duplicate roll number
       const existing = await Student.findOne({ rollNumber });
       if (existing) {
-        if (photoPath && fs.existsSync(photoPath)) {
-          fs.unlinkSync(photoPath);
-        }
+        if (photoPath && fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
         return next(new ErrorHandler("Roll number already exists", 400));
       }
 
-      // 🟢 Parent lookup – now optional and lenient
-      let parent = null;
-      if (cleanedParentId) {
-        parent = await Parent.findById(cleanedParentId);
-        if (!parent) {
-          // Log a warning but continue; student will be created without parent association
-          console.warn(`Parent with ID ${cleanedParentId} not found, proceeding without parent.`);
-          cleanedParentId = null; // Reset to null for student creation
-        }
-      }
-
-      // Check if class exists (if provided)
       if (classId) {
         const classExists = await Class.findById(classId);
         if (!classExists) {
-          if (photoPath && fs.existsSync(photoPath)) {
-            fs.unlinkSync(photoPath);
-          }
+          if (photoPath && fs.existsSync(photoPath)) fs.unlinkSync(photoPath);
           return next(new ErrorHandler("Class not found", 404));
         }
       }
 
-      // Prepare lastExamResult object
       let formattedLastExamResult = null;
       if (lastExamResult) {
         try {
-          const parsedLastExamResult = typeof lastExamResult === 'string'
-            ? JSON.parse(lastExamResult)
-            : lastExamResult;
-
+          const parsed = typeof lastExamResult === 'string'
+            ? JSON.parse(lastExamResult) : lastExamResult;
           formattedLastExamResult = {
-            examName: parsedLastExamResult.examName || '',
-            achievedMarks: parsedLastExamResult.achievedMarks || '',
-            totalMarks: parsedLastExamResult.totalMarks || ''
+            examName: parsed.examName || '',
+            achievedMarks: parsed.achievedMarks || '',
+            totalMarks: parsed.totalMarks || '',
           };
-        } catch (e) {
-          formattedLastExamResult = null;
-        }
+        } catch { formattedLastExamResult = null; }
       }
 
-      // Create student
       const studentData = {
-        name,
-        rollNumber,
-        password,
-        class: classId,
-        parent: cleanedParentId, // null if parent not found or not provided
-        gender,
-        session,
-        birthRegNo,
-        fathersName,
-        mothersName,
-        guardianContact,
-        religion,
+        name, rollNumber, password,
+        class: classId || null,
+        parent: null,
+        gender, session, birthRegNo, fathersName, mothersName,
+        guardianContact, religion,
         isPhysicallyDisabled: parsedIsPhysicallyDisabled,
         disabilityDescription: parsedIsPhysicallyDisabled ? disabilityDescription : '',
         lastExamResult: formattedLastExamResult,
         photo: photoPath,
-        dateOfBirth,
-        feeCategory,
-        transportRoute,
-        outstandingBalance: parsedOutstandingBalance,
-        financialNotes,
-        isStudent: true
+        dateOfBirth, feeCategory, transportRoute, financialNotes,
+        isStudent: true,
       };
-
-      // Remove null/undefined fields to avoid validation issues
-      Object.keys(studentData).forEach(key => {
-        if (studentData[key] === null || studentData[key] === undefined) {
-          delete studentData[key];
-        }
+      Object.keys(studentData).forEach(k => {
+        if (studentData[k] === null || studentData[k] === undefined) delete studentData[k];
       });
 
       const student = await Student.create(studentData);
 
-      // 🔹 Assign the student to the class
       if (classId) {
         await Class.findByIdAndUpdate(
           classId,
@@ -453,23 +256,22 @@ router.post(
         );
       }
 
-      // 🔹 Update parent's children array ONLY if a valid parent exists
-      if (cleanedParentId && parent) {
-        await Parent.findByIdAndUpdate(
-          cleanedParentId,
-          { $addToSet: { children: student._id } },
-          { new: true }
-        );
-      }
+      const { parent, tempPin } = await resolveParent(
+        {
+          parentId: cleanedParentId,
+          guardianContact,
+          fathersName,
+          mothersName,
+        },
+        student._id
+      );
 
-      // Populate for response
-      const populatedStudent = await Student.findById(student._id)
+      const populated = await Student.findById(student._id)
         .populate('class', 'name section')
         .populate('parent', 'name phone email')
         .populate('grade', 'name level')
         .select('-password');
 
-      // Generate token
       const token = student.getJwtToken();
 
       res.status(201).json({
@@ -478,38 +280,34 @@ router.post(
           ? "Student created successfully with photo"
           : "Student created successfully without photo",
         token,
-        student: populatedStudent,
+        student: populated,
         studentId: student._id,
         hasPhoto: !!photoPath,
         photoUrl: photoPath ? `/uploads/${path.basename(photoPath)}` : null,
-        hasParent: !!cleanedParentId
+        hasParent: !!parent,
+        parent: parent ? {
+          _id: parent._id,
+          name: parent.name,
+          phone: parent.phone,
+        } : null,
+        tempPin,
       });
 
     } catch (error) {
       console.error("Student registration with photo error:", error);
+      if (req.file?.path && fs.existsSync(req.file.path)) fs.unlinkSync(req.file.path);
 
-      // Delete uploaded photo if registration fails
-      if (req.file?.path && fs.existsSync(req.file.path)) {
-        fs.unlinkSync(req.file.path);
-      }
-
-      // Handle validation errors
       if (error.name === 'ValidationError') {
-        const messages = Object.values(error.errors).map(val => val.message);
+        const messages = Object.values(error.errors).map(v => v.message);
         return next(new ErrorHandler(messages.join(', '), 400));
       }
-
-      // Handle duplicate key error
       if (error.code === 11000) {
         const field = Object.keys(error.keyPattern)[0];
         return next(new ErrorHandler(`${field} already exists`, 400));
       }
-
-      // Handle ObjectId casting error
       if (error.name === 'CastError') {
         return next(new ErrorHandler(`Invalid ${error.path}: ${error.value}`, 400));
       }
-
       next(error);
     }
   }
@@ -587,96 +385,47 @@ router.post("/:id/photo",
 
 // ✅ OPTION 4: Remove Student Photo
 router.delete("/:id/photo",
-  isAuthenticated,
-  authorizeRoles("admin", "teacher"),
+  isAuthenticated, authorizeRoles("admin", "teacher"),
   catchAsyncErrors(async (req, res, next) => {
-    try {
-      const studentId = req.params.id;
+    const student = await Student.findById(req.params.id);
+    if (!student) return next(new ErrorHandler("Student not found", 404));
+    if (!student.photo) return next(new ErrorHandler("Student does not have a photo", 400));
 
-      // Check if student exists
-      const student = await Student.findById(studentId);
-      if (!student) {
-        return next(new ErrorHandler("Student not found", 404));
-      }
-
-      if (!student.photo) {
-        return next(new ErrorHandler("Student does not have a photo", 400));
-      }
-
-      // Delete photo file if exists
-      if (fs.existsSync(student.photo)) {
-        try {
-          fs.unlinkSync(student.photo);
-        } catch (unlinkError) {
-          console.warn("Could not delete photo file:", unlinkError.message);
-        }
-      }
-
-      // Remove photo reference from database
-      student.photo = null;
-      await student.save();
-
-      res.status(200).json({
-        success: true,
-        message: "Student photo removed successfully"
-      });
-
-    } catch (error) {
-      next(error);
+    if (fs.existsSync(student.photo)) {
+      try { fs.unlinkSync(student.photo); } catch (e) { console.warn(e.message); }
     }
+    student.photo = null;
+    await student.save();
+    res.json({ success: true, message: "Student photo removed successfully" });
   })
 );
 
 // ✅ Update Student (without photo) - Updated
 router.put("/update/:id",
-  isAuthenticated,
-  authorizeRoles("admin", "teacher"),
+  isAuthenticated, authorizeRoles("admin", "teacher"),
   async (req, res, next) => {
     try {
-      console.log("Update student called:", req.body);
       const {
-        name,
-        rollNumber,
-        password,
-        // Updated fields
-        guardianContact,
-        gender,
-        dateOfBirth,
-        classId,
-        gradeId,
-        parentId,
-        session,
-        birthRegNo,
-        fathersName,
-        mothersName,
-        religion,
-        isPhysicallyDisabled,
-        disabilityDescription,
-        lastExamResult,
-        // Note: Photo is NOT updated here
-        feeCategory,
-        transportRoute,
-        outstandingBalance,
-        financialNotes
+        name, rollNumber, password,
+        guardianContact, gender, dateOfBirth,
+        classId, gradeId, parentId, session,
+        birthRegNo, fathersName, mothersName, religion,
+        isPhysicallyDisabled, disabilityDescription, lastExamResult,
+        feeCategory, transportRoute, financialNotes,
       } = req.body;
 
-      const studentId = req.params.id;
-
-      // Find student
-      const student = await Student.findById(studentId);
+      const student = await Student.findById(req.params.id);
       if (!student) return next(new ErrorHandler("Student not found", 404));
 
-      // Check for duplicate roll number
       if (rollNumber && rollNumber !== student.rollNumber) {
         const existing = await Student.findOne({ rollNumber });
         if (existing) return next(new ErrorHandler("Roll number already exists", 400));
       }
 
-      // Store old values for relationship updates
-      const oldParentId = student.parent?.toString();
-      const oldClassId = student.class?.toString();
+      const oldParentId = student.parent ? String(student.parent) : null;
+      const oldClassId = student.class ? String(student.class) : null;
 
-      // Update student fields (excluding photo)
+      // --- scalar fields ---
       if (name) student.name = name;
       if (rollNumber) student.rollNumber = rollNumber;
       if (guardianContact) student.guardianContact = guardianContact;
@@ -684,21 +433,15 @@ router.put("/update/:id",
       if (dateOfBirth) student.dateOfBirth = dateOfBirth;
       if (classId) student.class = classId;
       if (gradeId) student.grade = gradeId;
-      if (parentId) student.parent = parentId;
       if (password) student.password = password;
-
-      // Update NEW FIELDS (excluding photo)
       if (session) student.session = session;
       if (birthRegNo !== undefined) student.birthRegNo = birthRegNo;
       if (fathersName !== undefined) student.fathersName = fathersName;
       if (mothersName !== undefined) student.mothersName = mothersName;
       if (religion !== undefined) student.religion = religion;
-      // Note: Photo is NOT updated here
       if (isPhysicallyDisabled !== undefined) {
         student.isPhysicallyDisabled = isPhysicallyDisabled;
-        if (!isPhysicallyDisabled) {
-          student.disabilityDescription = '';
-        }
+        if (!isPhysicallyDisabled) student.disabilityDescription = '';
       }
       if (disabilityDescription !== undefined) {
         student.disabilityDescription = disabilityDescription;
@@ -707,83 +450,77 @@ router.put("/update/:id",
         student.lastExamResult = {
           examName: lastExamResult.examName || '',
           achievedMarks: lastExamResult.achievedMarks || '',
-          totalMarks: lastExamResult.totalMarks || ''
+          totalMarks: lastExamResult.totalMarks || '',
         };
       }
       if (feeCategory) student.feeCategory = feeCategory;
       if (transportRoute !== undefined) student.transportRoute = transportRoute;
-      if (outstandingBalance !== undefined) student.outstandingBalance = outstandingBalance;
       if (financialNotes !== undefined) student.financialNotes = financialNotes;
 
-      // Update parent relationships if parent changed
-      if (parentId && parentId !== oldParentId) {
-        // Remove from old parent
-        if (oldParentId) {
-          await Parent.findByIdAndUpdate(
-            oldParentId,
-            { $pull: { children: studentId } }
-          );
+      // --- parent change ---
+      let tempPin = null;
+      let linkedParent = null;
+
+      if (parentId !== undefined) {
+        const newParentId = parentId || null;
+
+        if (newParentId !== oldParentId) {
+          // Detach from old
+          if (oldParentId) {
+            await Parent.findByIdAndUpdate(oldParentId, { $pull: { children: student._id } });
+          }
+
+          if (newParentId) {
+            linkedParent = await ParentService.linkExisting(newParentId, student._id);
+          } else if (guardianContact || student.guardianContact) {
+            // No explicit parent pick — attach by phone (may create new)
+            const r = await ParentService.attachToStudent(
+              {
+                phone: guardianContact || student.guardianContact,
+                name: fathersName || mothersName || 'Guardian',
+              },
+              student._id
+            );
+            linkedParent = r.parent;
+            tempPin = r.tempPin;
+          } else {
+            student.parent = null;
+          }
         }
-
-        // Add to new parent
-        const newParent = await Parent.findById(parentId);
-        if (!newParent) return next(new ErrorHandler("New parent not found", 404));
-
-        await Parent.findByIdAndUpdate(
-          parentId,
-          { $addToSet: { children: studentId } }
-        );
       }
 
-      // Update class relationships if class changed
+      // --- class change ---
       if (classId && classId !== oldClassId) {
-        // Remove from old class
         if (oldClassId) {
-          await Class.findByIdAndUpdate(
-            oldClassId,
-            { $pull: { students: studentId } }
-          );
+          await Class.findByIdAndUpdate(oldClassId, { $pull: { students: student._id } });
         }
-
-        // Add to new class
-        await Class.findByIdAndUpdate(
-          classId,
-          { $addToSet: { students: studentId } }
-        );
+        await Class.findByIdAndUpdate(classId, { $addToSet: { students: student._id } });
       }
 
-      // Save the student
       await student.save();
 
-      // Populate the updated student for response
-      const updatedStudent = await Student.findById(studentId)
+      const updated = await Student.findById(student._id)
         .populate('class', 'name section')
         .populate('parent', 'name phone email')
         .populate('grade', 'name level')
         .select('-password');
 
-      res.status(200).json({
+      res.json({
         success: true,
-        message: "Student updated successfully. Note: Photo must be updated separately.",
-        student: updatedStudent,
-        canUpdatePhoto: true,
+        message: "Student updated successfully",
+        student: updated,
+        tempPin, // non-null only when a new parent was auto-created
       });
-
     } catch (error) {
-      console.log("Student update error:", error);
-
-      // Handle validation errors
+      console.error("Student update error:", error);
       if (error.name === 'ValidationError') {
-        const messages = Object.values(error.errors).map(val => val.message);
+        const messages = Object.values(error.errors).map(v => v.message);
         return next(new ErrorHandler(messages.join(', '), 400));
       }
-
-      // Handle duplicate key error
       if (error.code === 11000) {
         const field = Object.keys(error.keyPattern)[0];
         return next(new ErrorHandler(`${field} already exists`, 400));
       }
-
       next(error);
     }
   }
@@ -797,7 +534,6 @@ router.post("/login", async (req, res, next) => {
       return next(new ErrorHandler("Please provide roll number and password", 400));
 
     const student = await Student.findOne({ rollNumber }).select("+password");
-    // console.log("login student :", student)
     if (!student) return next(new ErrorHandler("Invalid credentials", 400));
 
     const isMatch = await student.comparePassword(password);
@@ -809,137 +545,63 @@ router.post("/login", async (req, res, next) => {
   }
 });
 
-// Route
 router.get("/me",
   isStudentAuthenticated,
   catchAsyncErrors(async (req, res) => {
-    try {
-      // Populate student with all details
-      const student = await Student.findById(req.user._id)
-        .populate('class', 'name section academicYear supervisor')
-        .populate('grade', 'name gradePoint')
-        .populate('parent', 'name phone email')
-        .populate('transportRoute', 'routeName vehicleNumber driverName')
-        .select('-password');
+    const session = getCurrentSession();
 
-      if (!student) {
-        return res.status(404).json({
-          success: false,
-          message: "Student not found"
-        });
-      }
+    const student = await Student.findById(req.user._id)
+      .populate('class', 'name section academicYear supervisor')
+      .populate('grade', 'name gradePoint')
+      .populate('parent', 'name phone email')
+      .select('-password');
 
-      // Add photo URL
-      const studentWithPhoto = {
+    if (!student) return res.status(404).json({ success: false, message: "Student not found" });
+
+    const [summary, attendance] = await Promise.all([
+      StudentFinanceSummaryService.getSummary(student._id, session),
+      Attendance.find({ student: student._id })
+        .sort({ date: -1 })
+        .limit(5)
+        .populate('subject', 'name')
+        .lean(),
+    ]);
+
+    res.json({
+      success: true,
+      token: req.token,
+      user: {
         ...student.toObject(),
         photoUrl: student.photo ? `/uploads/${path.basename(student.photo)}` : null,
-        hasPhoto: !!student.photo
-      };
-
-      // Get quick stats for dashboard
-      const [payments, attendance] = await Promise.all([
-        Payment.find({ student: student._id })
-          .sort({ dueDate: -1 })
-          .limit(3),
-        Attendance.find({ student: student._id })
-          .sort({ date: -1 })
-          .limit(5)
-          .populate('subject', 'name')
-      ]);
-
-      res.json({
-        success: true,
-        token: req.token,
-        user: {
-          ...studentWithPhoto,
-          role: { name: "student" },
-          isStudent: true
-        },
-        dashboard: {
-          payments,
-          attendance
-        }
-      });
-
-    } catch (error) {
-      console.error("Student me route error:", error);
-      res.status(500).json({
-        success: false,
-        message: "Server Error"
-      });
-    }
+        hasPhoto: !!student.photo,
+        role: { name: "student" },
+        isStudent: true,
+      },
+      dashboard: {
+        financeSummary: summary ? {
+          totalFee: summary.totalFee?.toString() || '0',
+          totalPaid: summary.totalPaid?.toString() || '0',
+          advanceBalance: summary.advanceBalance?.toString() || '0',
+          dueBalance: summary.dueBalance?.toString() || '0',
+          status: summary.status || 'clear',
+        } : null,
+        attendance,
+      },
+    });
   })
 );
-// router.get("/me", 
-//   isStudentAuthenticated, 
-//   catchAsyncErrors(async (req, res) => {
-//     try {
-//       // Populate student with all details
-//       const student = await Student.findById(req.user._id)
-//         .populate('class', 'name section academicYear supervisor')
-//         .populate('grade', 'name gradePoint')
-//         .populate('parent', 'name phone email')
-//         .populate('transportRoute', 'routeName vehicleNumber driverName')
-//         .select('-password');
 
-//       if (!student) {
-//         return res.status(404).json({ 
-//           success: false, 
-//           message: "Student not found" 
-//         });
-//       }
-
-//       // Get quick stats for dashboard
-//       const [payments, attendance] = await Promise.all([
-//         Payment.find({ student: student._id })
-//           .sort({ dueDate: -1 })
-//           .limit(3),
-//         Attendance.find({ student: student._id })
-//           .sort({ date: -1 })
-//           .limit(5)
-//           .populate('subject', 'name')
-//       ]);
-
-//       res.json({
-//         success: true,
-//         token: req.token,
-//         user: {
-//           ...student.toObject(),
-//           role: { name: "student" },
-//           isStudent: true
-//         },
-//         dashboard: {
-//           payments,
-//           attendance
-//         }
-//       });
-
-//     } catch (error) {
-//       console.error("Student me route error:", error);
-//       res.status(500).json({ 
-//         success: false, 
-//         message: "Server Error" 
-//       });
-//     }
-//   })
-// );
 
 router.get("/refresh", async (req, res, next) => {
   try {
     const oldRefresh = req.cookies.student_refreshToken;
     if (!oldRefresh) return next(new ErrorHandler("Refresh token not found", 403));
 
-    // ✅ FIXED: Use same secret as token creation
     jwt.verify(oldRefresh, process.env.REFRESH_TOKEN_SECRET, (err, decoded) => {
       if (err) return next(new ErrorHandler("Invalid refresh token", 403));
 
-      const newAccess = jwt.sign({ id: decoded.id }, process.env.ACCESS_TOKEN_SECRET, {
-        expiresIn: "15m",
-      });
-
-      const newRefresh = jwt.sign({ id: decoded.id }, process.env.REFRESH_TOKEN_SECRET, {
-        expiresIn: "7d",
-      });
+      const newAccess = jwt.sign({ id: decoded.id }, process.env.ACCESS_TOKEN_SECRET, { expiresIn: "15m" });
+      const newRefresh = jwt.sign({ id: decoded.id }, process.env.REFRESH_TOKEN_SECRET, { expiresIn: "7d" });
 
       res.cookie("student_token", newAccess, {
         httpOnly: true,
@@ -947,23 +609,17 @@ router.get("/refresh", async (req, res, next) => {
         sameSite: "None",
         maxAge: 15 * 60 * 1000,
       });
-
       res.cookie("student_refreshToken", newRefresh, {
         httpOnly: true,
         secure: process.env.NODE_ENV === "production",
         sameSite: "None",
         maxAge: 7 * 24 * 60 * 60 * 1000,
       });
-
       res.status(200).json({ success: true, message: "Student token refreshed" });
     });
-  } catch (err) {
-    next(err);
-  }
+  } catch (err) { next(err); }
 });
 
-
-// ✅ Logout
 router.post("/logout", (req, res) => {
   res
     .cookie("student_token", "", { expires: new Date(0), httpOnly: true })
@@ -971,203 +627,117 @@ router.post("/logout", (req, res) => {
     .json({ success: true, message: "Student logged out" });
 });
 
-// 🎯 Get student's assignments
-router.get("/my/assignments",
-  isStudentAuthenticated,
-  catchAsyncErrors(async (req, res, next) => {
-    try {
-      const student = await Student.findById(req.user._id).populate('class');
-
-      if (!student?.class) {
-        return res.status(200).json({ success: true, assignments: [] });
-      }
-
-      // Get assignments with submission status in single query
-      const assignments = await Assignment.aggregate([
-        {
-          $match: {
-            class: student.class._id,
-            // Include both current and recent past assignments (last 6 months)
-            dueDate: {
-              $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) // 6 months back
-            }
-          }
-        },
-        {
-          $lookup: {
-            from: "assignmentsubmissions",
-            let: { assignmentId: "$_id" },
-            pipeline: [
-              {
-                $match: {
-                  $expr: {
-                    $and: [
-                      { $eq: ["$assignment", "$$assignmentId"] },
-                      { $eq: ["$student", student._id] }
-                    ]
-                  }
-                }
-              }
-            ],
-            as: "submission"
-          }
-        },
-        {
-          $addFields: {
-            submission: { $ifNull: ["$submission", []] },
-            submitted: { $gt: [{ $size: { $ifNull: ["$submission", []] } }, 0] }
-          }
-        },
-        {
-          $project: {
-            title: 1,
-            description: 1,
-            class: 1,
-            subject: 1,
-            dueDate: 1,
-            createdAt: 1,
-            submitted: 1,
-            submission: { $arrayElemAt: ["$submission", 0] },
-            status: {
-              $cond: [
-                { $gt: [{ $size: { $ifNull: ["$submission", []] } }, 0] },
-                "submitted",
-                {
-                  $cond: [
-                    { $lt: ["$dueDate", new Date()] },
-                    "overdue",
-                    "pending"
-                  ]
-                }
-              ]
-            }
-          }
-        },
-        { $sort: { dueDate: 1 } }
-      ]);
-
-      // Populate references
-      await Assignment.populate(assignments, [
-        { path: 'class', select: 'name' },
-        { path: 'subject', select: 'name code' },
-        { path: 'createdBy', select: 'name' }
-      ]);
-
-      res.status(200).json({ success: true, assignments });
-    } catch (error) {
-      next(error);
-    }
-  }));
-
-// 🎯 Get student's exams
-router.get("/my/exams", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+router.get("/my/assignments", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
   try {
     const student = await Student.findById(req.user._id).populate('class');
+    if (!student?.class) return res.json({ success: true, assignments: [] });
 
-    if (!student || !student.class) {
-      return res.status(200).json({
-        success: true,
-        exams: []
-      });
-    }
-
-    const exams = await Exam.find({
-      class: student.class._id,
-      // date: { $gte: new Date() }
-    })
-      .populate('class', 'name section')
-      .populate('subject', 'name code')
-      .populate('createdBy', 'name')
-      .sort({ date: 1, startTime: 1 });
-
-    res.status(200).json({
-      success: true,
-      exams
-    });
-
-  } catch (error) {
-    next(error);
-  }
-}));
-
-// 🎯 Get student's results
-router.get("/my/results", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
-  try {
-    const { term, year } = req.query;
-    const studentId = req.user._id;
-
-    let filter = { student: studentId };
-    if (term) filter.term = term;
-    if (year) filter.year = parseInt(year);
-
-    const results = await Result.find(filter)
-      .populate('exam', 'title totalMarks date')
-      .populate('subject', 'name code')
-      .sort({ 'exam.date': -1 });
-
-    // Calculate statistics
-    const totalExams = results.length;
-    const totalMarks = results.reduce((sum, result) => sum + result.marksObtained, 0);
-    const averageMarks = totalExams > 0 ? totalMarks / totalExams : 0;
-
-    // Group by term and year
-    const termResults = {};
-    results.forEach(result => {
-      const key = `${result.term}-${result.year}`;
-      if (!termResults[key]) {
-        termResults[key] = [];
-      }
-      termResults[key].push(result);
-    });
-
-    res.status(200).json({
-      success: true,
-      results,
-      statistics: {
-        totalExams,
-        totalMarks,
-        averageMarks: Math.round(averageMarks * 100) / 100
+    const assignments = await Assignment.aggregate([
+      { $match: { class: student.class._id, dueDate: { $gte: new Date(Date.now() - 180 * 24 * 60 * 60 * 1000) } } },
+      {
+        $lookup: {
+          from: "assignmentsubmissions",
+          let: { assignmentId: "$_id" },
+          pipeline: [{
+            $match: {
+              $expr: {
+                $and: [
+                  { $eq: ["$assignment", "$$assignmentId"] },
+                  { $eq: ["$student", student._id] },
+                ],
+              },
+            },
+          }],
+          as: "submission",
+        },
       },
-      termResults
-    });
+      {
+        $addFields: {
+          submission: { $ifNull: ["$submission", []] },
+          submitted: { $gt: [{ $size: { $ifNull: ["$submission", []] } }, 0] },
+        },
+      },
+      {
+        $project: {
+          title: 1, description: 1, class: 1, subject: 1, dueDate: 1, createdAt: 1,
+          submitted: 1,
+          submission: { $arrayElemAt: ["$submission", 0] },
+          status: {
+            $cond: [
+              { $gt: [{ $size: { $ifNull: ["$submission", []] } }, 0] },
+              "submitted",
+              { $cond: [{ $lt: ["$dueDate", new Date()] }, "overdue", "pending"] },
+            ],
+          },
+        },
+      },
+      { $sort: { dueDate: 1 } },
+    ]);
 
-  } catch (error) {
-    next(error);
-  }
+    await Assignment.populate(assignments, [
+      { path: 'class', select: 'name' },
+      { path: 'subject', select: 'name code' },
+      { path: 'createdBy', select: 'name' },
+    ]);
+
+    res.json({ success: true, assignments });
+  } catch (error) { next(error); }
 }));
 
-// 🎯 Get student's routines/schedule
+router.get("/my/exams", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const student = await Student.findById(req.user._id).populate('class');
+  if (!student || !student.class) return res.json({ success: true, exams: [] });
+
+  const exams = await Exam.find({ class: student.class._id })
+    .populate('class', 'name section')
+    .populate('subject', 'name code')
+    .populate('createdBy', 'name')
+    .sort({ date: 1, startTime: 1 });
+
+  res.json({ success: true, exams });
+}));
+
+router.get("/my/results", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const { term, year } = req.query;
+  const filter = { student: req.user._id };
+  if (term) filter.term = term;
+  if (year) filter.year = parseInt(year);
+
+  const results = await Result.find(filter)
+    .populate('exam', 'title totalMarks date')
+    .populate('subject', 'name code')
+    .sort({ 'exam.date': -1 });
+
+  const totalExams = results.length;
+  const totalMarks = results.reduce((s, r) => s + r.marksObtained, 0);
+  const averageMarks = totalExams > 0 ? totalMarks / totalExams : 0;
+
+  const termResults = {};
+  results.forEach(r => {
+    const key = `${r.term}-${r.year}`;
+    if (!termResults[key]) termResults[key] = [];
+    termResults[key].push(r);
+  });
+
+  res.json({
+    success: true,
+    results,
+    statistics: { totalExams, totalMarks, averageMarks: Math.round(averageMarks * 100) / 100 },
+    termResults,
+  });
+}));
+
 router.get("/my/routines", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
-  try {
-    const student = await Student.findById(req.user._id).populate('class');
+  const student = await Student.findById(req.user._id).populate('class');
+  if (!student || !student.class) return res.json({ success: true, routines: [] });
 
-    if (!student || !student.class) {
-      return res.status(200).json({
-        success: true,
-        routines: []
-      });
-    }
+  const routines = await Routine.find({ class: student.class._id })
+    .populate('class', 'name section')
+    .populate('subject', 'name code')
+    .populate({ path: 'teacher', populate: { path: 'user', select: 'name' } })
+    .sort({ day: 1, startTime: 1 });
 
-    const routines = await Routine.find({
-      class: student.class._id
-    })
-      .populate('class', 'name section')
-      .populate('subject', 'name code')
-      .populate('teacher', 'user')
-      .populate({
-        path: 'teacher',
-        populate: { path: 'user', select: 'name' }
-      })
-      .sort({ day: 1, startTime: 1 });
-
-    res.status(200).json({
-      success: true,
-      routines
-    });
-
-  } catch (error) {
-    next(error);
-  }
+  res.json({ success: true, routines });
 }));
 
 // 🎯 Get today's routines for student
@@ -1232,317 +802,153 @@ router.get("/my/class", isStudentAuthenticated, catchAsyncErrors(async (req, res
   }
 }));
 
-//start student payment endpoints
 // ✅ Get student's payment information
-router.get("/my/payments", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
-  try {
-    const { academicYear = new Date().getFullYear().toString(), page = 1, limit = 10 } = req.query;
-    const skip = (page - 1) * limit;
+router.get("/my/finance", isStudentAuthenticated, catchAsyncErrors(async (req, res) => {
+  const session = req.query.session || getCurrentSession();
+  const studentId = req.user._id;
 
-    // Since student is authenticated, we can use req.user._id
-    const studentId = req.user._id;
+  const [summary, bills, payments, advance, fees] = await Promise.all([
+    StudentFinanceSummaryService.getSummary(studentId, session),
+    BillService.getMonthlyBills(studentId, session),
+    PaymentService.getPaymentHistory(studentId, session, 30),
+    PaymentService.getStudentAdvanceBalance(studentId, session),
+    FeeService.getStudentFees(studentId, session),
+  ]);
 
-    const [payments, total, student] = await Promise.all([
-      Payment.find({
-        student: studentId,
-        academicYear
-      })
-        .populate('class', 'name')
-        .populate('collectedBy', 'name')
-        .sort({ dueDate: -1, createdAt: -1 })
-        .skip(skip)
-        .limit(parseInt(limit)),
-
-      Payment.countDocuments({
-        student: studentId,
-        academicYear
-      }),
-
-      Student.findById(studentId)
-        .populate('class', 'name section')
-        .select('name rollNumber class')
-    ]);
-
-    // Calculate payment summary
-    const totalDue = payments.reduce((sum, payment) => sum + payment.amount, 0);
-    const totalPaid = payments.reduce((sum, payment) => sum + payment.paidAmount, 0);
-    const outstanding = totalDue - totalPaid;
-
-    // Group payments by status
-    const paymentsByStatus = {
-      paid: payments.filter(p => p.status === 'paid'),
-      pending: payments.filter(p => p.status === 'pending'),
-      overdue: payments.filter(p => p.status === 'overdue'),
-      partial: payments.filter(p => p.status === 'partial')
-    };
-
-    res.status(200).json({
-      success: true,
-      student,
-      payments,
-      summary: {
-        totalDue,
-        totalPaid,
-        outstanding,
-        collectionRate: totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 100,
-        statusCounts: {
-          paid: paymentsByStatus.paid.length,
-          pending: paymentsByStatus.pending.length,
-          overdue: paymentsByStatus.overdue.length,
-          partial: paymentsByStatus.partial.length
-        }
-      },
-      pagination: {
-        currentPage: parseInt(page),
-        totalPages: Math.ceil(total / limit),
-        totalPayments: total,
-        hasNext: page * limit < total,
-        hasPrev: page > 1
-      }
-    });
-
-  } catch (error) {
-    console.error('Error in student payments:', error);
-    next(error);
-  }
+  res.json({
+    success: true,
+    session,
+    summary: summary ? {
+      totalFee: summary.totalFee?.toString() || '0',
+      totalPaid: summary.totalPaid?.toString() || '0',
+      totalWaived: summary.totalWaived?.toString() || '0',
+      totalAdvanceUsed: summary.totalAdvanceUsed?.toString() || '0',
+      totalRefunded: summary.totalRefunded?.toString() || '0',
+      advanceBalance: summary.advanceBalance?.toString() || '0',
+      dueBalance: summary.dueBalance?.toString() || '0',
+      status: summary.status || 'clear',
+    } : null,
+    bills,
+    payments: payments.map(p => ({
+      _id: p._id,
+      receiptNumber: p.receiptNumber,
+      amount: p.amount.toString(),
+      method: p.method,
+      status: p.status,
+      createdAt: p.createdAt,
+    })),
+    fees: fees.map(f => ({
+      _id: f._id,
+      title: f.title,
+      totalAmount: f.totalAmount.toString(),
+      paidAmount: f.paidAmount.toString(),
+      waivedAmount: f.waivedAmount.toString(),
+      advanceUsed: f.advanceUsed.toString(),
+      dueAmount: f.dueAmount.toString(),
+      dueDate: f.dueDate,
+      status: f.status,
+    })),
+    advance: {
+      amount: advance.amount.toString(),
+      currency: advance.currency || 'BDT',
+    },
+  });
 }));
 
-// ✅ Get student payment summary for dashboard
-router.get("/my/payments/summary", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
-  try {
-    const { academicYear = new Date().getFullYear().toString() } = req.query;
-    const studentId = req.user._id;
-
-    const payments = await Payment.find({
-      student: studentId,
-      academicYear
-    });
-
-    const totalDue = payments.reduce((sum, payment) => sum + payment.amount, 0);
-    const totalPaid = payments.reduce((sum, payment) => sum + payment.paidAmount, 0);
-    const outstanding = totalDue - totalPaid;
-
-    // Get upcoming due payments
-    const upcomingPayments = await Payment.find({
-      student: studentId,
-      academicYear,
-      dueDate: { $gte: new Date() },
-      status: { $in: ['pending', 'overdue'] }
-    })
-      .populate('class', 'name')
-      .sort({ dueDate: 1 })
-      .limit(5);
-
-    // Get recent payments
-    const recentPayments = await Payment.find({
-      student: studentId,
-      academicYear,
-      status: { $in: ['paid', 'partial'] }
-    })
-      .populate('class', 'name')
-      .sort({ paidDate: -1 })
-      .limit(5);
-
-    res.status(200).json({
-      success: true,
-      summary: {
-        totalDue,
-        totalPaid,
-        outstanding,
-        collectionRate: totalDue > 0 ? Math.round((totalPaid / totalDue) * 100) : 100
-      },
-      upcomingPayments: upcomingPayments.map(p => ({
-        _id: p._id,
-        feeType: p.feeType,
-        amount: p.amount,
-        dueDate: p.dueDate,
-        status: p.status
-      })),
-      recentPayments: recentPayments.map(p => ({
-        _id: p._id,
-        feeType: p.feeType,
-        paidAmount: p.paidAmount,
-        paidDate: p.paidDate,
-        receiptNumber: p.receiptNumber
-      }))
-    });
-
-  } catch (error) {
-    console.error('Error in student payment summary:', error);
-    next(error);
-  }
-}));
-
-// ✅ Download student's payment receipt
-router.get("/my/payments/:paymentId/receipt", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
-  try {
-    const { paymentId } = req.params;
-    const studentId = req.user._id;
-
-    // Find payment and verify it belongs to the student
-    const payment = await Payment.findOne({
-      _id: paymentId,
-      student: studentId
-    })
-      .populate('class', 'name')
-      .populate('recordedBy', 'name');
-
-    if (!payment) {
-      return next(new ErrorHandler("Payment not found or access denied", 404));
-    }
-
-    // Get student info
-    const student = await Student.findById(studentId)
-      .populate('class', 'name section')
-      .select('name rollNumber class');
-
-    res.status(200).json({
-      success: true,
-      receipt: {
-        receiptNumber: payment.receiptNumber,
-        student: student,
-        class: payment.class,
-        feeType: payment.feeType,
-        amount: payment.amount,
-        paidAmount: payment.paidAmount,
-        paidDate: payment.paidDate,
-        paymentMethod: payment.paymentMethod,
-        status: payment.status,
-        recordedBy: payment.recordedBy,
-        transactionId: payment.transactionId,
-        dueDate: payment.dueDate
-      }
-    });
-
-  } catch (error) {
-    console.error('Error generating student receipt:', error);
-    next(error);
-  }
-}));
-
-// ✅ Get student dashboard with payment info (enhanced version)
 router.get("/my/dashboard", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
-  try {
-    const studentId = req.user._id;
-    const currentYear = new Date().getFullYear().toString();
+  const studentId = req.user._id;
+  const session = getCurrentSession();
 
-    const student = await Student.findById(studentId)
-      .populate('class', 'name section')
-      .select('name rollNumber class email');
+  const student = await Student.findById(studentId)
+    .populate('class', 'name section')
+    .select('name rollNumber class email photo');
 
-    if (!student) {
-      return next(new ErrorHandler("Student profile not found", 404));
-    }
+  if (!student) return next(new ErrorHandler("Student profile not found", 404));
 
-    // Get payment summary
-    const payments = await Payment.find({
+  const [summary, bills, payments, recentAttendance, recentResults] = await Promise.all([
+    StudentFinanceSummaryService.getSummary(studentId, session),
+    BillService.getMonthlyBills(studentId, session),
+    PaymentService.getPaymentHistory(studentId, session, 3),
+    Attendance.find({
       student: studentId,
-      academicYear: currentYear
-    });
-
-    const paymentSummary = {
-      totalDue: payments.reduce((sum, p) => sum + p.amount, 0),
-      totalPaid: payments.reduce((sum, p) => sum + p.paidAmount, 0),
-      totalOutstanding: payments.reduce((sum, p) => sum + (p.amount - p.paidAmount), 0)
-    };
-
-    paymentSummary.collectionRate = paymentSummary.totalDue > 0 ?
-      Math.round((paymentSummary.totalPaid / paymentSummary.totalDue) * 100) : 100;
-
-    // Get upcoming due payments
-    const upcomingPayments = await Payment.find({
-      student: studentId,
-      academicYear: currentYear,
-      dueDate: { $gte: new Date() },
-      status: { $in: ['pending', 'overdue'] }
-    })
-      .populate('class', 'name')
-      .sort({ dueDate: 1 })
-      .limit(3);
-
-    // Get recent payments
-    const recentPayments = await Payment.find({
-      student: studentId,
-      academicYear: currentYear,
-      status: { $in: ['paid', 'partial'] }
-    })
-      .populate('class', 'name')
-      .sort({ paidDate: -1 })
-      .limit(3);
-
-    // Get recent attendance (last 10 records)
-    const recentAttendance = await Attendance.find({
-      student: studentId,
-      date: {
-        $gte: new Date(new Date().setDate(new Date().getDate() - 30))
-      }
+      date: { $gte: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000) },
     })
       .populate('subject', 'name')
       .populate('class', 'name')
       .sort({ date: -1, period: 1 })
-      .limit(10);
-
-    // Get recent results
-    const recentResults = await Result.find({
-      student: studentId
-    })
+      .limit(10)
+      .lean(),
+    Result.find({ student: studentId })
       .populate('exam', 'title')
       .populate('subject', 'name')
       .sort({ createdAt: -1 })
-      .limit(5);
+      .limit(5)
+      .lean(),
+  ]);
 
-    // Get today's assignments
-    const today = new Date();
-    const todayAssignments = await Assignment.find({
-      class: student.class?._id,
-      dueDate: {
-        $gte: new Date(today.setHours(0, 0, 0, 0)),
-        $lt: new Date(today.setHours(23, 59, 59, 999))
-      }
-    })
-      .populate('subject', 'name')
-      .populate('class', 'name')
-      .limit(5);
+  const attendanceStats = {
+    totalRecords: recentAttendance.length,
+    presentRecords: recentAttendance.filter(a => a.status === 'present').length,
+    lateRecords: recentAttendance.filter(a => a.status === 'late').length,
+    halfDayRecords: recentAttendance.filter(a => a.status === 'half_day').length,
+  };
+  const weightedScore = attendanceStats.presentRecords
+    + attendanceStats.lateRecords * 0.5
+    + attendanceStats.halfDayRecords * 0.5;
+  attendanceStats.attendancePercentage = attendanceStats.totalRecords > 0
+    ? Math.round((weightedScore / attendanceStats.totalRecords) * 100) : 0;
 
-    // Calculate attendance statistics
-    const attendanceStats = {
-      totalRecords: recentAttendance.length,
-      presentRecords: recentAttendance.filter(a => a.status === 'present').length,
-      lateRecords: recentAttendance.filter(a => a.status === 'late').length,
-      halfDayRecords: recentAttendance.filter(a => a.status === 'half_day').length
-    };
+  // Today's assignments
+  const today = new Date();
+  const todayStart = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
 
-    const weightedScore = attendanceStats.presentRecords +
-      (attendanceStats.lateRecords * 0.5) +
-      (attendanceStats.halfDayRecords * 0.5);
+  const todayAssignments = await Assignment.find({
+    class: student.class?._id,
+    dueDate: { $gte: todayStart, $lt: todayEnd },
+  })
+    .populate('subject', 'name')
+    .populate('class', 'name')
+    .limit(5)
+    .lean();
 
-    attendanceStats.attendancePercentage = attendanceStats.totalRecords > 0 ?
-      Math.round((weightedScore / attendanceStats.totalRecords) * 100) : 0;
-
-    res.status(200).json({
-      success: true,
-      dashboard: {
-        student,
-        payments: {
-          summary: paymentSummary,
-          upcoming: upcomingPayments,
-          recent: recentPayments
+  res.json({
+    success: true,
+    dashboard: {
+      student: {
+        ...student.toObject(),
+        photoUrl: student.photo ? `/uploads/${path.basename(student.photo)}` : null,
+      },
+      session,
+      payments: {
+        summary: summary ? {
+          totalFee: summary.totalFee?.toString() || '0',
+          totalPaid: summary.totalPaid?.toString() || '0',
+          totalOutstanding: summary.dueBalance?.toString() || '0',
+          advanceBalance: summary.advanceBalance?.toString() || '0',
+          status: summary.status || 'clear',
+        } : {
+          totalFee: '0', totalPaid: '0', totalOutstanding: '0',
+          advanceBalance: '0', status: 'clear',
         },
-        attendance: {
-          stats: attendanceStats,
-          recent: recentAttendance
-        },
-        assignments: {
-          today: todayAssignments
-        },
-        results: recentResults
-      }
-    });
-
-  } catch (error) {
-    console.error('Error in student dashboard:', error);
-    next(error);
-  }
+        recentBills: bills.slice(0, 3),
+        recentPayments: payments.map(p => ({
+          _id: p._id,
+          receiptNumber: p.receiptNumber,
+          amount: p.amount.toString(),
+          method: p.method,
+          status: p.status,
+          createdAt: p.createdAt,
+        })),
+      },
+      attendance: {
+        stats: attendanceStats,
+        recent: recentAttendance,
+      },
+      assignments: { today: todayAssignments },
+      results: recentResults,
+    },
+  });
 }));
 
 //end student payments endpoints
@@ -2155,5 +1561,459 @@ router.get("/:id",
     }
   }
 );
+
+/* ============================================================
+ *  STUDENT FINANCE — extended endpoints
+ * ============================================================ */
+
+/**
+ * GET /my/finance/summary
+ * Lightweight summary only — used by the dashboard header and any page
+ * that just needs the numbers without fetching bills/payments/fees.
+ */
+router.get("/my/finance/summary", isStudentAuthenticated, catchAsyncErrors(async (req, res) => {
+  const session = req.query.session || getCurrentSession();
+  const summary = await StudentFinanceSummaryService.getSummary(req.user._id, session);
+
+  res.json({
+    success: true,
+    session,
+    summary: summary ? {
+      totalFee: summary.totalFee?.toString() || '0',
+      totalPaid: summary.totalPaid?.toString() || '0',
+      totalWaived: summary.totalWaived?.toString() || '0',
+      totalAdvanceUsed: summary.totalAdvanceUsed?.toString() || '0',
+      totalRefunded: summary.totalRefunded?.toString() || '0',
+      totalLateFee: summary.totalLateFee?.toString() || '0',
+      advanceBalance: summary.advanceBalance?.toString() || '0',
+      dueBalance: summary.dueBalance?.toString() || '0',
+      status: summary.status || 'clear',
+      lastUpdated: summary.lastUpdated,
+    } : {
+      totalFee: '0', totalPaid: '0', totalWaived: '0',
+      totalAdvanceUsed: '0', totalRefunded: '0', totalLateFee: '0',
+      advanceBalance: '0', dueBalance: '0', status: 'clear',
+    },
+  });
+}));
+
+/**
+ * GET /my/finance/bills/:monthKey
+ * One month's bill, with the fee items enriched by their payment
+ * allocations and waiver — so the student can see exactly which
+ * payments settled which fee.
+ * monthKey format: "YYYY-MM", e.g. "2026-01"
+ */
+router.get("/my/finance/bills/:monthKey", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const FeeInstance = require('../financeSystem/models/FeeInstance');
+  const session = req.query.session || getCurrentSession();
+  const { monthKey } = req.params;
+
+  const bills = await BillService.getMonthlyBills(req.user._id, session);
+  const bill = bills.find((b) => b.monthKey === monthKey);
+
+  if (!bill) return next(new ErrorHandler("Bill not found for this month", 404));
+
+  // Enrich items
+  const feeIds = bill.items.map((i) => i._id);
+  const detailed = await FeeInstance.find({ _id: { $in: feeIds } })
+    .populate({
+      path: 'paymentAllocations',
+      select: 'payment amount allocatedAt isReversed',
+      populate: { path: 'payment', select: 'receiptNumber method createdAt' },
+    })
+    .populate('waiver', 'type amount status approvedDate reason')
+    .lean();
+
+  const byId = Object.fromEntries(detailed.map((f) => [String(f._id), f]));
+
+  const items = bill.items.map((item) => {
+    const d = byId[String(item._id)] || {};
+    return {
+      ...item,
+      waiver: d.waiver ? {
+        type: d.waiver.type,
+        amount: d.waiver.amount?.toString?.() ?? String(d.waiver.amount),
+        approvedDate: d.waiver.approvedDate,
+        reason: d.waiver.reason,
+      } : null,
+      allocations: (d.paymentAllocations || [])
+        .filter((a) => !a.isReversed)
+        .map((a) => ({
+          _id: a._id,
+          receiptNumber: a.payment?.receiptNumber,
+          method: a.payment?.method,
+          amount: a.amount?.toString?.() ?? String(a.amount),
+          allocatedAt: a.allocatedAt,
+        })),
+    };
+  });
+
+  res.json({
+    success: true,
+    session,
+    bill: { ...bill, items },
+  });
+}));
+
+/**
+ * GET /my/finance/fees/:feeInstanceId
+ * Single fee detail with a full timeline:
+ *   fee_created → waiver_applied → payment_allocated (multiple) → advance_applied
+ */
+router.get("/my/finance/fees/:feeInstanceId", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const FeeInstance = require('../financeSystem/models/FeeInstance');
+
+  const fee = await FeeInstance.findById(req.params.feeInstanceId)
+    .populate({
+      path: 'paymentAllocations',
+      select: 'payment amount allocatedAt isReversed',
+      populate: { path: 'payment', select: 'receiptNumber method createdAt status' },
+    })
+    .populate('waiver', 'type amount status approvedDate reason')
+    .populate('feeTemplate', 'title description frequency')
+    .lean();
+
+  if (!fee) return next(new ErrorHandler("Fee not found", 404));
+  if (String(fee.student) !== String(req.user._id)) {
+    return next(new ErrorHandler("Access denied", 403));
+  }
+
+  const timeline = [];
+
+  timeline.push({
+    at: fee.createdAt,
+    type: 'fee_created',
+    description: `Fee charged: ${fee.title}`,
+    amount: fee.totalAmount?.toString?.() ?? String(fee.totalAmount),
+  });
+
+  if (fee.waiver && fee.waiver.status === 'approved') {
+    timeline.push({
+      at: fee.waiver.approvedDate || fee.waiver.createdAt,
+      type: 'waiver_applied',
+      description: `Waiver applied — ${fee.waiver.reason || fee.waiver.type}`,
+      amount: fee.waiver.amount?.toString?.() ?? String(fee.waiver.amount),
+    });
+  }
+
+  for (const alloc of fee.paymentAllocations || []) {
+    if (alloc.isReversed) continue;
+    timeline.push({
+      at: alloc.allocatedAt,
+      type: 'payment_allocated',
+      description: `Payment received — ${alloc.payment?.receiptNumber || alloc.payment?._id}`,
+      amount: alloc.amount?.toString?.() ?? String(alloc.amount),
+      receiptNumber: alloc.payment?.receiptNumber,
+      method: alloc.payment?.method,
+    });
+  }
+
+  const advanceUsed = Number(fee.advanceUsed?.toString?.() || fee.advanceUsed || 0);
+  if (advanceUsed > 0) {
+    timeline.push({
+      at: fee.updatedAt,
+      type: 'advance_applied',
+      description: 'Advance balance applied',
+      amount: fee.advanceUsed?.toString?.() ?? String(fee.advanceUsed),
+    });
+  }
+
+  timeline.sort((a, b) => new Date(a.at) - new Date(b.at));
+
+  res.json({
+    success: true,
+    fee: {
+      _id: fee._id,
+      title: fee.title,
+      frequency: fee.frequency,
+      originalAmount: fee.originalAmount?.toString?.() ?? String(fee.originalAmount),
+      taxAmount: fee.taxAmount?.toString?.() ?? String(fee.taxAmount),
+      lateFeeAmount: fee.lateFeeAmount?.toString?.() ?? String(fee.lateFeeAmount),
+      totalAmount: fee.totalAmount?.toString?.() ?? String(fee.totalAmount),
+      paidAmount: fee.paidAmount?.toString?.() ?? String(fee.paidAmount),
+      waivedAmount: fee.waivedAmount?.toString?.() ?? String(fee.waivedAmount),
+      advanceUsed: fee.advanceUsed?.toString?.() ?? String(fee.advanceUsed),
+      dueAmount: fee.dueAmount?.toString?.() ?? String(fee.dueAmount),
+      status: fee.status,
+      issueDate: fee.issueDate,
+      dueDate: fee.dueDate,
+      paidDate: fee.paidDate,
+      session: fee.session,
+      feeTemplate: fee.feeTemplate,
+    },
+    waiver: fee.waiver ? {
+      type: fee.waiver.type,
+      amount: fee.waiver.amount?.toString?.() ?? String(fee.waiver.amount),
+      status: fee.waiver.status,
+      approvedDate: fee.waiver.approvedDate,
+      reason: fee.waiver.reason,
+    } : null,
+    allocations: (fee.paymentAllocations || [])
+      .filter((a) => !a.isReversed)
+      .map((a) => ({
+        _id: a._id,
+        receiptNumber: a.payment?.receiptNumber,
+        method: a.payment?.method,
+        amount: a.amount?.toString?.() ?? String(a.amount),
+        allocatedAt: a.allocatedAt,
+      })),
+    timeline,
+  });
+}));
+
+/**
+ * GET /my/finance/waivers
+ * Approved and revoked waivers applied to this student.
+ */
+router.get("/my/finance/waivers", isStudentAuthenticated, catchAsyncErrors(async (req, res) => {
+  const FeeWaiver = require('../financeSystem/models/FeeWaiver');
+  const session = req.query.session || getCurrentSession();
+
+  const waivers = await FeeWaiver.find({
+    student: req.user._id,
+    status: { $in: ['approved', 'revoked'] },
+  })
+    .populate('feeInstance', 'title dueDate totalAmount session')
+    .sort({ approvedDate: -1, createdAt: -1 })
+    .lean();
+
+  const filtered = session
+    ? waivers.filter((w) => !w.feeInstance || w.feeInstance.session === session)
+    : waivers;
+
+  res.json({
+    success: true,
+    session,
+    waivers: filtered.map((w) => ({
+      _id: w._id,
+      type: w.type,
+      amount: w.amount?.toString?.() ?? String(w.amount),
+      percentage: w.percentage?.toString?.() ?? null,
+      status: w.status,
+      reason: w.reason,
+      requestDate: w.requestDate,
+      approvedDate: w.approvedDate,
+      effectiveFrom: w.effectiveFrom,
+      effectiveUntil: w.effectiveUntil,
+      feeInstance: w.feeInstance ? {
+        _id: w.feeInstance._id,
+        title: w.feeInstance.title,
+        dueDate: w.feeInstance.dueDate,
+        totalAmount: w.feeInstance.totalAmount?.toString?.() ?? String(w.feeInstance.totalAmount),
+      } : null,
+    })),
+  });
+}));
+
+/**
+ * GET /my/finance/advance/transactions
+ * Every credit/debit that built up or drained the advance balance.
+ */
+router.get("/my/finance/advance/transactions", isStudentAuthenticated, catchAsyncErrors(async (req, res) => {
+  const AdvanceBalance = require('../financeSystem/models/AdvanceBalance');
+  const session = req.query.session || getCurrentSession();
+
+  const advance = await AdvanceBalance.findOne({
+    student: req.user._id,
+    session,
+  }).lean();
+
+  if (!advance) {
+    return res.json({
+      success: true,
+      session,
+      currentBalance: '0',
+      currency: 'BDT',
+      transactions: [],
+    });
+  }
+
+  const transactions = (advance.transactions || [])
+    .map((t) => ({
+      _id: t._id,
+      type: t.type,
+      amount: t.amount?.toString?.() ?? String(t.amount),
+      previousBalance: t.previousBalance?.toString?.() ?? null,
+      newBalance: t.newBalance?.toString?.() ?? null,
+      description: t.description,
+      paymentId: t.paymentId,
+      refundId: t.refundId,
+      feeInstanceId: t.feeInstanceId,
+      transactionId: t.transactionId,
+      createdAt: t.createdAt,
+    }))
+    .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
+
+  res.json({
+    success: true,
+    session,
+    currentBalance: advance.amount?.toString?.() ?? String(advance.amount ?? 0),
+    currency: advance.currency || 'BDT',
+    lastUpdated: advance.lastUpdated,
+    transactions,
+  });
+}));
+
+/**
+ * GET /my/finance/statement
+ * Streams the student's own statement PDF. Avoids a redirect so the
+ * browser can save the file directly.
+ */
+router.get("/my/finance/statement", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  // Adjust this path if your StatementPdfService lives elsewhere — see how
+  // financeSystem/routes/pdfRoutes.js imports it and mirror that path.
+  const StatementPdfService = require('../services/pdf/StatementPdfService');
+  const session = req.query.session || getCurrentSession();
+
+  const buf = await StatementPdfService.generate(req.user._id, session);
+
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader(
+    'Content-Disposition',
+    `inline; filename="statement-${req.user.rollNumber || req.user._id}.pdf"`
+  );
+  res.send(buf);
+}));
+
+/* ============================================================
+ *  STUDENT ONLINE PAYMENTS
+ * ============================================================ */
+
+const PaymentIntentService = require('../services/PaymentIntentService');
+const { toDecimal } = require('../utils/decimal');
+
+/**
+ * POST /my/payment-intents
+ * Student creates a payment intent for the current session.
+ * Amount must be > 0 and within a sane ceiling.
+ */
+router.post("/my/payment-intents", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const {
+    amount,
+    gateway = 'sslcommerz',
+    method = 'online',
+    session: sessionYear,
+    notes,
+    feeInstances = [],
+  } = req.body;
+
+  const payAmount = toDecimal(amount);
+  if (payAmount.lte(0)) {
+    return next(new ErrorHandler('Amount must be positive', 400));
+  }
+
+  const session = sessionYear || getCurrentSession();
+  const summary = await StudentFinanceSummaryService.getSummary(req.user._id, session);
+  const dueBalance = toDecimal(summary?.dueBalance || 0);
+
+  // Ceiling: outstanding + a generous advance top-up buffer.
+  // Prevents fat-finger and malicious inputs.
+  const MAX_ADVANCE_TOPUP = toDecimal(50000);
+  const maxAllowed = dueBalance.gt(0)
+    ? dueBalance.plus(MAX_ADVANCE_TOPUP)
+    : MAX_ADVANCE_TOPUP;
+
+  if (payAmount.gt(maxAllowed)) {
+    return next(new ErrorHandler(
+      `Amount exceeds maximum allowed for this student (${maxAllowed.toFixed(2)})`,
+      400
+    ));
+  }
+
+  // Reject explicit fee targeting the student doesn't own.
+  const FeeInstance = require('../financeSystem/models/FeeInstance');
+  const feeIds = Array.isArray(feeInstances) ? feeInstances : [];
+  if (feeIds.length > 0) {
+    const owned = await FeeInstance.countDocuments({
+      _id: { $in: feeIds },
+      student: req.user._id,
+    });
+    if (owned !== feeIds.length) {
+      return next(new ErrorHandler('One or more fee instances do not belong to you', 403));
+    }
+  }
+
+  // Return to the student portal after gateway redirect
+  const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const intent = await PaymentIntentService.createIntent(
+    {
+      studentId: req.user._id,
+      amount: payAmount.toFixed(2),
+      purpose: 'fee_payment',
+      method,
+      gateway,
+      feeInstances: feeIds,
+      session,
+      notes,
+      // returnUrl: `${FRONTEND_URL}/student/payments/result?intentId=__ID__&status=success`,
+      // cancelUrl: `${FRONTEND_URL}/student/payments/result?intentId=__ID__&status=cancel`,
+    },
+    req.user._id
+  );
+
+  res.status(201).json({
+    success: true,
+    data: {
+      _id: intent._id,
+      status: intent.status,
+      amount: intent.amount?.toString?.() ?? String(intent.amount),
+      gateway: intent.gateway,
+      // null for cash/manual — student portal should only offer online
+      redirectUrl: intent.redirectUrl || null,
+      expiresAt: intent.expiresAt,
+    },
+  });
+}));
+
+/**
+ * GET /my/payment-intents/:id
+ * Polled by the result page until status is terminal.
+ */
+router.get("/my/payment-intents/:id", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const PaymentIntent = require('../financeSystem/models/PaymentIntent');
+  const intent = await PaymentIntent.findById(req.params.id).lean();
+
+  if (!intent) return next(new ErrorHandler('Intent not found', 404));
+  if (String(intent.student) !== String(req.user._id)) {
+    return next(new ErrorHandler('Access denied', 403));
+  }
+
+  res.json({
+    success: true,
+    data: {
+      _id: intent._id,
+      status: intent.status,
+      amount: intent.amount?.toString?.() ?? String(intent.amount),
+      gateway: intent.gateway,
+      gatewayReference: intent.gatewayReference,
+      failureReason: intent.failureReason,
+      payment: intent.payment,
+      createdAt: intent.createdAt,
+      completedAt: intent.completedAt,
+      expiresAt: intent.expiresAt,
+    },
+  });
+}));
+
+/**
+ * POST /my/payment-intents/:id/cancel
+ * Student backs out of a pending intent.
+ */
+router.post("/my/payment-intents/:id/cancel", isStudentAuthenticated, catchAsyncErrors(async (req, res, next) => {
+  const PaymentIntent = require('../financeSystem/models/PaymentIntent');
+  const intent = await PaymentIntent.findById(req.params.id);
+  if (!intent) return next(new ErrorHandler('Intent not found', 404));
+  if (String(intent.student) !== String(req.user._id)) {
+    return next(new ErrorHandler('Access denied', 403));
+  }
+
+  const cancelled = await PaymentIntentService.cancelIntent(intent._id, req.user._id);
+  res.json({
+    success: true,
+    data: { _id: cancelled._id, status: cancelled.status },
+  });
+}));
+
 
 module.exports = router;

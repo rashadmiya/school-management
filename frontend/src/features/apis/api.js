@@ -11,7 +11,6 @@ export const api = createApi({
         'Student',
         'Teacher',
         'Parent',
-        'Class',
         'Subject', // ✅ Add this
         'Routine',
         'Attendance', // ✅ Add this
@@ -28,8 +27,6 @@ export const api = createApi({
         'Cabinet',
         'Club',
         'Section',
-        'FeeStructure',
-        'Payment',
         'Fee',
         'StudentFinance',
         'StudentLedger',
@@ -39,10 +36,10 @@ export const api = createApi({
         'Reports',
         'MyPayments',
         'MyDashboard',
-        'FeeTemplate',
-        'FeeInstance',
-        'Report',
-        'Ledger',
+        'FeeTemplate', 'FeeInstance', 'Payment', 'Ledger',
+        'AdvanceBalance', 'Report', 'Refund', 'Waiver', 'Session',
+        'PaymentIntent', 'Audit', 'Adjustment', 'Reconciliation',
+        'Notification', 'Bill','ParentNotifications',
         // NEW: Gallery tags
         'Gallery',
         'GalleryCategories',
@@ -122,70 +119,24 @@ export const api = createApi({
             },
         }),
 
-        // Create student
-        // ✅ OPTION 1: Create student without photo
         createStudent: builder.mutation({
             query: (studentData) => ({
                 url: "/students/register",
                 method: "POST",
                 body: studentData,
             }),
-            async onQueryStarted(arg, { queryFulfilled, dispatch }) {
-                try {
-                    const { data } = await queryFulfilled;
-                    if (data.token && data.student) {
-                        dispatch(userLoggedIn({
-                            token: data.token,
-                            user: data.student,
-                            role: "student",
-                            isStudent: true
-                        }));
-                    }
-                } catch (err) {
-                    console.error("Student creation failed:", err);
-                }
-            },
-            invalidatesTags: [{ type: "Students", id: "LIST" }]
+            invalidatesTags: [{ type: "Students", id: "LIST" }],
+            // ✅ no onQueryStarted — admin stays logged in as admin
         }),
 
-        // ✅ OPTION 2: Create student with photo (single step)
         createStudentWithPhoto: builder.mutation({
             query: (formData) => ({
                 url: "/students/register-with-photo",
                 method: "POST",
                 body: formData,
             }),
-            async onQueryStarted(arg, { queryFulfilled, dispatch }) {
-                try {
-                    const { data } = await queryFulfilled;
-                    if (data.token && data.student) {
-                        dispatch(userLoggedIn({
-                            token: data.token,
-                            user: data.student,
-                            role: "student",
-                            isStudent: true
-                        }));
-                    }
-                } catch (err) {
-                    console.error("Student creation with photo failed:", err);
-                }
-            },
-            invalidatesTags: [{ type: "Students", id: "LIST" }]
+            invalidatesTags: [{ type: "Students", id: "LIST" }],
         }),
-
-        // ✅ OPTION 3: Upload/update student photo
-        // uploadStudentPhoto: builder.mutation({
-        //     query: ({ id, formData }) => ({
-        //         url: `/students/${id}/photo`,
-        //         method: "POST",
-        //         body: formData,
-        //     }),
-        //     invalidatesTags: (result, error, { id }) => [
-        //         { type: "Students", id },
-        //         { type: "Students", id: "LIST" },
-        //         { type: "StudentProfile" }
-        //     ]
-        // }),
 
         // ✅ OPTION 4: Remove student photo
         removeStudentPhoto: builder.mutation({

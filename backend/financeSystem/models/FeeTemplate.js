@@ -1,106 +1,150 @@
-// UPDATED models/FeeTemplate.js
+// financeSystem/models/FeeTemplate.js
 const mongoose = require('mongoose');
+const { moneyPlugin, Decimal128 } = require('../../utils/moneySchemaPlugin');
 
 const feeTemplateSchema = new mongoose.Schema({
-    title: {
-        type: String,
-        required: true,
-        trim: true
-    },
+    title: { type: String, required: true, trim: true },
     description: String,
-    amount: {
-        type: Number,
-        required: true,
-        min: 0
-    },
-    currency: {
-        type: String,
-        default: 'BDT'
-    },
+    amount: { type: Decimal128, required: true },
+    currency: { type: String, default: 'BDT' },
     frequency: {
         type: String,
         enum: ['one_time', 'monthly', 'quarterly', 'yearly', 'custom'],
-        default: 'one_time'
+        default: 'one_time',
     },
     appliesTo: {
-        scope: {
-            type: String,
-            enum: ['all', 'class', 'section', 'individual'],
-            required: true
-        },
-        class: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Class',
-            default: null
-        },
-        section: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Section',
-            default: null
-        },
-        individualStudent: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Student',
-            default: null
-        },
-        grade: {
-            type: mongoose.Schema.Types.ObjectId,
-            ref: 'Grade',
-            default: null
-        }
+        scope: { type: String, enum: ['all', 'class', 'section', 'individual'], required: true },
+        class: { type: mongoose.Schema.Types.ObjectId, ref: 'Class', default: null },
+        section: { type: mongoose.Schema.Types.ObjectId, ref: 'Section', default: null },
+        individualStudent: { type: mongoose.Schema.Types.ObjectId, ref: 'Student', default: null },
+        grade: { type: mongoose.Schema.Types.ObjectId, ref: 'Grade', default: null },
     },
-    isActive: {
-        type: Boolean,
-        default: true
-    },
-    dueDay: {
-        type: Number,
-        min: 1,
-        max: 31,
-        default: 1
-    },
+    isActive: { type: Boolean, default: true },
+    dueDay: { type: Number, min: 1, max: 31, default: 1 },
     lateFee: {
-        amount: Number,
-        percentage: Number,
-        afterDays: Number
+        amount: { type: Decimal128, default: 0 },
+        percentage: { type: Number, default: 0 },
+        afterDays: { type: Number, default: 0 },
     },
-    taxPercentage: {
-        type: Number,
-        default: 0,
-        min: 0,
-        max: 100
-    },
-    // Metadata
-    createdBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User',
-        required: true
-    },
-    updatedBy: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'User'
-    },
-    session: {
-        type: String,
-        required: true,
-        index: true
-    },
-    // For installment plans
-    installmentPlan: {
-        type: mongoose.Schema.Types.ObjectId,
-        ref: 'InstallmentPlan'
-    },
-    allowPartialPayments: {
-        type: Boolean,
-        default: true
-    }
-}, {
-    timestamps: true
-});
+    taxPercentage: { type: Number, default: 0, min: 0, max: 100 },
+    createdBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', required: true },
+    updatedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User' },
+    session: { type: String, required: true, index: true },
+    installmentPlan: { type: mongoose.Schema.Types.ObjectId, ref: 'InstallmentPlan' },
+    allowPartialPayments: { type: Boolean, default: true },
+}, { timestamps: true });
 
-// Indexes
+feeTemplateSchema.plugin(moneyPlugin);
+
 feeTemplateSchema.index({ isActive: 1, session: 1 });
 feeTemplateSchema.index({ 'appliesTo.scope': 1, 'appliesTo.class': 1 });
 feeTemplateSchema.index({ 'appliesTo.scope': 1, 'appliesTo.section': 1 });
 
 module.exports = mongoose.model('FeeTemplate', feeTemplateSchema);
+
+// // UPDATED models/FeeTemplate.js
+// const mongoose = require('mongoose');
+
+// const feeTemplateSchema = new mongoose.Schema({
+//     title: {
+//         type: String,
+//         required: true,
+//         trim: true
+//     },
+//     description: String,
+//     amount: {
+//         type: Number,
+//         required: true,
+//         min: 0
+//     },
+//     currency: {
+//         type: String,
+//         default: 'BDT'
+//     },
+//     frequency: {
+//         type: String,
+//         enum: ['one_time', 'monthly', 'quarterly', 'yearly', 'custom'],
+//         default: 'one_time'
+//     },
+//     appliesTo: {
+//         scope: {
+//             type: String,
+//             enum: ['all', 'class', 'section', 'individual'],
+//             required: true
+//         },
+//         class: {
+//             type: mongoose.Schema.Types.ObjectId,
+//             ref: 'Class',
+//             default: null
+//         },
+//         section: {
+//             type: mongoose.Schema.Types.ObjectId,
+//             ref: 'Section',
+//             default: null
+//         },
+//         individualStudent: {
+//             type: mongoose.Schema.Types.ObjectId,
+//             ref: 'Student',
+//             default: null
+//         },
+//         grade: {
+//             type: mongoose.Schema.Types.ObjectId,
+//             ref: 'Grade',
+//             default: null
+//         }
+//     },
+//     isActive: {
+//         type: Boolean,
+//         default: true
+//     },
+//     dueDay: {
+//         type: Number,
+//         min: 1,
+//         max: 31,
+//         default: 1
+//     },
+//     lateFee: {
+//         amount: Number,
+//         percentage: Number,
+//         afterDays: Number
+//     },
+//     taxPercentage: {
+//         type: Number,
+//         default: 0,
+//         min: 0,
+//         max: 100
+//     },
+//     // Metadata
+//     createdBy: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: 'User',
+//         required: true
+//     },
+//     updatedBy: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: 'User'
+//     },
+//     session: {
+//         type: String,
+//         required: true,
+//         index: true
+//     },
+//     // For installment plans
+//     installmentPlan: {
+//         type: mongoose.Schema.Types.ObjectId,
+//         ref: 'InstallmentPlan'
+//     },
+//     allowPartialPayments: {
+//         type: Boolean,
+//         default: true
+//     }
+// }, {
+//     timestamps: true
+// });
+
+// // Indexes
+// feeTemplateSchema.index({ isActive: 1, session: 1 });
+// feeTemplateSchema.index({ 'appliesTo.scope': 1, 'appliesTo.class': 1 });
+// feeTemplateSchema.index({ 'appliesTo.scope': 1, 'appliesTo.section': 1 });
+
+// module.exports = mongoose.model('FeeTemplate', feeTemplateSchema);

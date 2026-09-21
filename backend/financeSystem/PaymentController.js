@@ -33,28 +33,6 @@ class PaymentController {
         }
     }
 
-    // GET /api/payments/student/:studentId
-    // static async getPaymentHistory(req, res) {
-    //     try {
-    //         const { session = PaymentService.getCurrentSession(), limit = 50 } = req.query;
-    //         const payments = await PaymentService.getPaymentHistory(
-    //             req.params.studentId, 
-    //             session,
-    //             parseInt(limit)
-    //         );
-
-    //         res.json({
-    //             success: true,
-    //             data: payments
-    //         });
-    //     } catch (err) {
-    //         res.status(400).json({
-    //             success: false,
-    //             message: err.message
-    //         });
-    //     }
-    // }
-
     static async getPaymentHistory(req, res) {
         try {
 
@@ -115,7 +93,7 @@ class PaymentController {
             });
 
         } catch (err) {
-            console.error('Error in getPaymentHistory:', err);
+            console.error('Error in get PaymentHistory:', err);
             res.status(400).json({
                 success: false,
                 message: err.message
@@ -296,6 +274,15 @@ class PaymentController {
                 message: err.message
             });
         }
+    }
+
+    // controllers/PaymentController.js — add
+    static async voidPayment(req, res) {
+        const { reason } = req.body;
+        if (!reason) throw new Error('Reason is required for voiding a payment');
+
+        const result = await PaymentService.voidPayment(req.params.id, reason, req.user._id);
+        res.json({ success: true, message: 'Payment voided successfully', data: result });
     }
 }
 

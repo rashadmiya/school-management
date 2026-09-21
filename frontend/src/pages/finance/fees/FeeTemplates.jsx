@@ -1,311 +1,423 @@
-// src/pages/Fees/FeeTemplates.jsx
-import { useDeleteFeeTemplateMutation, useGetFeeTemplatesQuery } from '@/features/apis/finance/feeApi'
+// src/pages/finance/fees/FeeTemplates.jsx
 import {
-  CheckCircle,
-  Download,
-  Edit,
-  Eye,
-  FileText,
-  Filter,
-  Plus,
-  Search,
-  Trash2,
-  XCircle
-} from 'lucide-react'
-import { useState } from 'react'
-import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Input } from '@/components/ui/input'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+    ConfirmDialog,
+    FinanceEmptyState, FinanceLoading,
+    FinancePageHeader, FinanceStatCard,
+    MoneyDisplay,
+    SessionSelector,
+    StatusBadge,
+} from '@/components/finance';
+import ApplyNowPanel from '@/components/finance/templates/ApplyNowPanel';
+import FeeTemplateForm from '@/components/finance/templates/FeeTemplateForm';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import {
+    Dialog, DialogContent, DialogHeader, DialogTitle,
+} from '@/components/ui/dialog';
+import { Input } from '@/components/ui/input';
+import {
+    Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+} from '@/components/ui/select';
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from '@/components/ui/table';
+import { useGetClassesQuery } from '@/features/apis/classesApi';
+import {
+    useDeleteFeeTemplateMutation,
+    useGetFeeTemplatesQuery,
+} from '@/features/apis/finance/feeApi';
+import { useFinancePermissions } from '@/hooks/finance/useFinancePermissions';
+import { useFinanceTheme } from '@/hooks/finance/useFinanceTheme';
+import { getFrequencyLabel, getScopeLabel } from '@/lib/financeUtils';
+import { formatDate } from '@/lib/formaters';
+import {
+    Calendar,
+    CheckCircle, Download, Edit, FileText, Plus, Search, Sparkles,
+    Tag,
+    Trash2, Users, XCircle,
+} from 'lucide-react';
+import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 
-import FeeTemplateForm from '@/components/finance/FeeTemplateForm'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from '@/components/ui/dialog'
+export default function FeeTemplates() {
+    const theme = useFinanceTheme();
+    const can = useFinancePermissions();
+    const navigate = useNavigate();
 
-import { Badge } from '@/components/ui/badge'
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { useToast } from '@/hooks/use-toast'
-import { formatCurrency, formatDate } from '@/lib/formaters'
-import { FEE_SCOPE_OPTIONS, FREQUENCY_OPTIONS, SESSION_OPTIONS } from '@/utils/constants'
-import { useGetClassesQuery } from '@/features/apis/classesApi'
+    const [search, setSearch] = useState('');
+    const [session, setSession] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [showForm, setShowForm] = useState(false);
+    const [editing, setEditing] = useState(null);
+    const [deleting, setDeleting] = useState(null);
+    const [createdTemplate, setCreatedTemplate] = useState(null);
+    const { data, isLoading, refetch } = useGetFeeTemplatesQuery({
+        session: session || undefined,
+        isActive: statusFilter === 'all' ? undefined : statusFilter === 'active',
+    });
+    const templates = data?.data || [];
 
-const FeeTemplates = () => {
-  const [search, setSearch] = useState('')
-  const [session, setSession] = useState('')
-  const [isActive, setIsActive] = useState('')
-  const [showForm, setShowForm] = useState(false)
-  const [selectedTemplate, setSelectedTemplate] = useState(null)
+    const { data: classesData } = useGetClassesQuery();
+    const classes = classesData?.classes || [];
 
-  const { data:templatesData, isLoading, refetch } = useGetFeeTemplatesQuery({
-    session: session || undefined,
-    isActive: isActive === '' ? undefined : isActive === 'true',
-  });
-  const templates = templatesData?.data || [];
+    const [deleteTemplate, { isLoading: isDeleting }] = useDeleteFeeTemplateMutation();
 
-  const { data: classesData } = useGetClassesQuery();
+    // Filtered
+    const filtered = useMemo(() => {
+        if (!search) return templates;
+        const q = search.toLowerCase();
+        return templates.filter(
+            (t) =>
+                t.title?.toLowerCase().includes(q) ||
+                t.description?.toLowerCase().includes(q)
+        );
+    }, [templates, search]);
 
-  const [deleteTemplate] = useDeleteFeeTemplateMutation()
-  const { toast } = useToast()
+    // Stats
+    const activeCount = templates.filter((t) => t.isActive).length;
+    const sessionCount = new Set(templates.map((t) => t.session)).size;
+    const frequencyCount = new Set(templates.map((t) => t.frequency)).size;
 
-  const handleDelete = async (id) => {
-    if (window.confirm('Are you sure you want to delete this fee template?')) {
-      try {
-        await deleteTemplate(id).unwrap()
-        toast({
-          title: 'Success',
-          description: 'Fee template deleted successfully',
-          variant: 'success',
-        })
-      } catch (error) {
-        toast({
-          title: 'Error',
-          description: 'Failed to delete fee template',
-          variant: 'destructive',
-        })
-      }
-    }
-  }
+    // Handlers
+    const handleCreate = () => {
+        setEditing(null);
+        setShowForm(true);
+    };
 
-  const handleEdit = (template) => {
-    setSelectedTemplate(template)
-    setShowForm(true)
-  }
+    const handleEdit = (t) => {
+        setEditing(t);
+        setShowForm(true);
+    };
 
-  const handleFormSuccess = () => {
-    setShowForm(false)
-    setSelectedTemplate(null)
-    refetch()
-    toast({
-      title: 'Success',
-      description: 'Fee template saved successfully',
-      variant: 'success',
-    })
-  }
+    const handleFormSuccess = (result) => {
+        // Create path: FeeTemplateForm passes the created template back.
+        // Edit path: result is undefined — close as before.
+        if (result?._id) {
+            setCreatedTemplate(result);
+            return;
+        }
+        setShowForm(false);
+        setEditing(null);
+        refetch();
+    };
 
-  const filteredTemplates = templates?.filter(template => {
-    if (search && !template.title.toLowerCase().includes(search.toLowerCase())) {
-      return false
-    }
-    return true
-  }) || []
+    const handleApplyFinished = () => {
+        // Both Skip and Apply end up here
+        setShowForm(false);
+        setEditing(null);
+        setCreatedTemplate(null);
+        refetch();
+    };
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold tracking-tight">Fee Templates</h1>
-          <p className="text-muted-foreground">
-            Create and manage fee templates for different categories
-          </p>
-        </div>
-        <Dialog open={showForm} onOpenChange={setShowForm}>
-          <DialogTrigger asChild>
-            <Button onClick={() => setSelectedTemplate(null)}>
-              <Plus className="mr-2 h-4 w-4" />
-              New Template
-            </Button>
-          </DialogTrigger>
-          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>
-                {selectedTemplate ? 'Edit Fee Template' : 'Create New Fee Template'}
-              </DialogTitle>
-            </DialogHeader>
-            
-            <FeeTemplateForm
-              template={selectedTemplate}
-              classes={classesData?.classes || []}
-              onSuccess={handleFormSuccess}
-              onCancel={() => {
-                setShowForm(false)
-                setSelectedTemplate(null)
-              }}
+    const handleFormCancel = () => {
+        setShowForm(false);
+        setEditing(null);
+        setCreatedTemplate(null);
+    };
+
+    const handleDelete = async () => {
+        if (!deleting) return;
+        try {
+            await deleteTemplate(deleting._id).unwrap();
+            toast.success('Fee template deleted');
+            setDeleting(null);
+        } catch (err) {
+            toast.error(err?.data?.message || 'Failed to delete template');
+        }
+    };
+
+    const handleApply = (t) => {
+        navigate(`/admin/finance/fees/apply?templateId=${t._id}`);
+    };
+
+    const handleViewEligible = (t) => {
+        navigate(`/admin/finance/fees/templates/${t._id}/eligible`);
+    };
+
+    return (
+        <div className={`space-y-6 ${theme.text}`}>
+            <FinancePageHeader
+                title="Fee Templates"
+                subtitle="Define reusable fees and apply them to students."
+                actions={
+                    <>
+                        {can.canApplyFees && (
+                            <Button
+                                variant="outline"
+                                onClick={() => navigate('/admin/finance/fees/apply')}
+                                className={theme.outlineBtn}
+                            >
+                                <Sparkles className="w-4 h-4 mr-2" />
+                                Apply Fees
+                            </Button>
+                        )}
+                        {can.canCreateTemplate && (
+                            <Button onClick={handleCreate} className={theme.primaryBtn}>
+                                <Plus className="w-4 h-4 mr-2" />
+                                New Template
+                            </Button>
+                        )}
+                    </>
+                }
             />
-          </DialogContent>
-        </Dialog>
-      </div>
 
-      {/* Filters */}
-      <Card>
-        <CardContent className="pt-6">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-              <Input
-                placeholder="Search templates..."
-                className="pl-10"
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
+            {/* Stats */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <FinanceStatCard
+                    label="Total Templates"
+                    value={templates.length}
+                    icon={FileText}
+                    accent="blue"
+                />
+                <FinanceStatCard
+                    label="Active"
+                    value={activeCount}
+                    icon={CheckCircle}
+                    accent="green"
+                />
+                <FinanceStatCard
+                    label="Sessions"
+                    value={sessionCount}
+                    icon={Calendar}
+                    accent="purple"
+                />
+                <FinanceStatCard
+                    label="Frequencies"
+                    value={frequencyCount}
+                    icon={Tag}
+                    accent="yellow"
+                />
             </div>
-            <Select value={session ?? 'all'}
-              onValueChange={(value) => setSession(value === 'all' ? '' : value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Sessions" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Sessions</SelectItem>
-                {SESSION_OPTIONS.map((option) => (
-                  <SelectItem key={option.value} value={option.value}>
-                    {option.label}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={isActive ?? 'all'}
-              onValueChange={(value) => setIsActive(value === 'all' ? '' : value)}>
-              <SelectTrigger>
-                <SelectValue placeholder="All Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="true">Active</SelectItem>
-                <SelectItem value="false">Inactive</SelectItem>
-              </SelectContent>
-            </Select>
-            <div className="flex items-center space-x-2">
-              <Button variant="outline" className="flex-1">
-                <Filter className="mr-2 h-4 w-4" />
-                Filter
-              </Button>
-              <Button variant="outline" size="icon">
-                <Download className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
-      {/* Templates Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Fee Templates ({filteredTemplates.length})</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex items-center justify-center h-64">
-              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-            </div>
-          ) : filteredTemplates.length === 0 ? (
-            <div className="text-center py-12">
-              <FileText className="mx-auto h-12 w-12 text-gray-400" />
-              <h3 className="mt-4 text-lg font-semibold">No fee templates found</h3>
-              <p className="text-gray-500">Create your first fee template to get started</p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Amount</TableHead>
-                    <TableHead>Frequency</TableHead>
-                    <TableHead>Applies To</TableHead>
-                    <TableHead>Session</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
-                    <TableHead className="text-right">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {filteredTemplates.map((template) => (
-                    <TableRow key={template._id}>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{template.title}</div>
-                          {template.description && (
-                            <div className="text-sm text-gray-500 truncate max-w-xs">
-                              {template.description}
-                            </div>
-                          )}
+            {/* Filters */}
+            <Card className={`border shadow-sm ${theme.card}`}>
+                <CardContent className="pt-5">
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="relative">
+                            <Search className={`absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 ${theme.textMuted}`} />
+                            <Input
+                                placeholder="Search templates..."
+                                value={search}
+                                onChange={(e) => setSearch(e.target.value)}
+                                className={`pl-10 ${theme.input}`}
+                            />
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="font-semibold">{formatCurrency(template.amount)}</div>
-                        {template.taxPercentage > 0 && (
-                          <div className="text-sm text-gray-500">
-                            +{template.taxPercentage}% tax
-                          </div>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {FREQUENCY_OPTIONS.find(f => f.value === template.frequency)?.label || template.frequency}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <Badge variant="secondary">
-                            {FEE_SCOPE_OPTIONS.find(s => s.value === template?.appliesTo?.scope)?.label || template?.appliesTo?.scope}
-                          </Badge>
-                          {template?.appliesTo?.class && (
-                            <div className="text-xs text-gray-500">
-                              Class: {template?.appliesTo?.class}
-                            </div>
-                          )}
-                          {template?.appliesTo?.section && (
-                            <div className="text-xs text-gray-500">
-                              Section: {template?.appliesTo?.section?.name}
-                            </div>
-                          )}
+
+                        <SessionSelector
+                            value={session}
+                            onChange={setSession}
+                            includeAll
+                            width="w-full"
+                        />
+
+                        <Select value={statusFilter} onValueChange={setStatusFilter}>
+                            <SelectTrigger className={theme.select}>
+                                <SelectValue />
+                            </SelectTrigger>
+                            <SelectContent className={theme.selectContent}>
+                                <SelectItem value="all" className={theme.selectItem}>All Status</SelectItem>
+                                <SelectItem value="active" className={theme.selectItem}>Active</SelectItem>
+                                <SelectItem value="inactive" className={theme.selectItem}>Inactive</SelectItem>
+                            </SelectContent>
+                        </Select>
+
+                        <Button
+                            variant="outline"
+                            onClick={() => { setSearch(''); setSession(''); setStatusFilter('all'); }}
+                            className={theme.outlineBtn}
+                        >
+                            <Download className="w-4 h-4 mr-2" />
+                            Export
+                        </Button>
+                    </div>
+                </CardContent>
+            </Card>
+
+            {/* Table */}
+            <Card className={`border shadow-sm ${theme.card}`}>
+                <CardHeader className="pb-3">
+                    <CardTitle className={`text-lg ${theme.text}`}>
+                        Templates ({filtered.length})
+                    </CardTitle>
+                </CardHeader>
+                <CardContent className="p-0">
+                    {isLoading ? (
+                        <FinanceLoading rows={5} />
+                    ) : filtered.length === 0 ? (
+                        <FinanceEmptyState
+                            icon={FileText}
+                            title="No fee templates yet"
+                            description="Fee templates define what you charge, how often, and to whom."
+                            actionLabel={can.canCreateTemplate ? 'Create First Template' : undefined}
+                            onAction={can.canCreateTemplate ? handleCreate : undefined}
+                        />
+                    ) : (
+                        <div className="overflow-x-auto">
+                            <Table>
+                                <TableHeader className={theme.tableHeader}>
+                                    <TableRow>
+                                        <TableHead className={theme.textMuted}>Template</TableHead>
+                                        <TableHead className={theme.textMuted}>Amount</TableHead>
+                                        <TableHead className={theme.textMuted}>Frequency</TableHead>
+                                        <TableHead className={theme.textMuted}>Applies To</TableHead>
+                                        <TableHead className={theme.textMuted}>Session</TableHead>
+                                        <TableHead className={theme.textMuted}>Status</TableHead>
+                                        <TableHead className={theme.textMuted}>Created</TableHead>
+                                        <TableHead className={`text-right ${theme.textMuted}`}>Actions</TableHead>
+                                    </TableRow>
+                                </TableHeader>
+                                <TableBody>
+                                    {filtered.map((t) => (
+                                        <TableRow key={t._id} className={`${theme.row} transition-colors`}>
+                                            <TableCell className="max-w-[280px]">
+                                                <div className="flex items-center gap-3">
+                                                    <div className={`p-2 rounded-lg ${theme.iconBox}`}>
+                                                        <FileText className="w-4 h-4" />
+                                                    </div>
+                                                    <div className="min-w-0">
+                                                        <p className={`text-sm font-medium truncate ${theme.text}`}>{t.title}</p>
+                                                        {t.description && (
+                                                            <p className={`text-xs truncate ${theme.textMuted}`}>{t.description}</p>
+                                                        )}
+                                                    </div>
+                                                </div>
+                                            </TableCell>
+                                            <TableCell>
+                                                <MoneyDisplay value={t.amount} />
+                                                {t.taxPercentage > 0 && (
+                                                    <p className={`text-xs ${theme.textMuted}`}>+{t.taxPercentage}% tax</p>
+                                                )}
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`text-sm ${theme.textSoft}`}>
+                                                    {getFrequencyLabel(t.frequency)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`text-sm ${theme.textSoft}`}>
+                                                    {getScopeLabel(t.appliesTo?.scope)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`text-sm ${theme.textMuted}`}>{t.session}</span>
+                                            </TableCell>
+                                            <TableCell>
+                                                <StatusBadge
+                                                    domain="fee"
+                                                    status={t.isActive ? 'paid' : 'cancelled'}
+                                                    label={t.isActive ? 'Active' : 'Inactive'}
+                                                    icon={t.isActive ? CheckCircle : XCircle}
+                                                />
+                                            </TableCell>
+                                            <TableCell>
+                                                <span className={`text-xs ${theme.textMuted}`}>
+                                                    {formatDate(t.createdAt)}
+                                                </span>
+                                            </TableCell>
+                                            <TableCell className="text-right">
+                                                <div className="flex items-center justify-end gap-1">
+                                                    {can.canApplyFees && (
+                                                        <Button
+                                                            variant="ghost" size="sm"
+                                                            onClick={() => handleApply(t)}
+                                                            disabled={!t.isActive}
+                                                            className={`${theme.ghostBtn} ${theme.isDarkMode ? 'text-blue-400' : 'text-blue-600'}`}
+                                                            title="Apply to students"
+                                                        >
+                                                            <Sparkles className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    <Button
+                                                        variant="ghost" size="sm"
+                                                        onClick={() => handleViewEligible(t)}
+                                                        className={theme.ghostBtn}
+                                                        title="View eligible students"
+                                                    >
+                                                        <Users className="h-4 w-4" />
+                                                    </Button>
+                                                    {can.canEditTemplate && (
+                                                        <Button
+                                                            variant="ghost" size="sm"
+                                                            onClick={() => handleEdit(t)}
+                                                            className={theme.ghostBtn}
+                                                            title="Edit"
+                                                        >
+                                                            <Edit className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                    {can.canDeleteTemplate && (
+                                                        <Button
+                                                            variant="ghost" size="sm"
+                                                            onClick={() => setDeleting(t)}
+                                                            className={`${theme.ghostBtn} hover:text-red-500`}
+                                                            title="Delete"
+                                                        >
+                                                            <Trash2 className="h-4 w-4" />
+                                                        </Button>
+                                                    )}
+                                                </div>
+                                            </TableCell>
+                                        </TableRow>
+                                    ))}
+                                </TableBody>
+                            </Table>
                         </div>
-                      </TableCell>
-                      <TableCell>{template.session}</TableCell>
-                      <TableCell>
-                        {template.isActive ? (
-                          <Badge className="bg-green-100 text-green-800">
-                            <CheckCircle className="mr-1 h-3 w-3" />
-                            Active
-                          </Badge>
-                        ) : (
-                          <Badge variant="outline" className="text-gray-500">
-                            <XCircle className="mr-1 h-3 w-3" />
-                            Inactive
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        <div className="text-sm">
-                          {formatDate(template.createdAt)}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex items-center justify-end space-x-2">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleEdit(template)}
-                          >
-                            <Edit className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => handleDelete(template._id)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => {
-                              // Navigate to apply fee page
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  )
+                    )}
+                </CardContent>
+            </Card>
+
+            {/* Form dialog */}
+            <Dialog
+                open={showForm}
+                onOpenChange={(o) => {
+                    if (!o) handleFormCancel();
+                    else setShowForm(true);
+                }}
+            >
+                <DialogContent className={`max-w-3xl max-h-[90vh] overflow-y-auto ${theme.dialog}`}>
+                    <DialogHeader>
+                        <DialogTitle className={theme.text}>
+                            {createdTemplate
+                                ? 'Apply Fee to Students'
+                                : editing
+                                    ? 'Edit Fee Template'
+                                    : 'Create New Fee Template'}
+                        </DialogTitle>
+                    </DialogHeader>
+
+                    {createdTemplate ? (
+                        <ApplyNowPanel
+                            template={createdTemplate}
+                            onSkip={handleApplyFinished}
+                            onApplied={handleApplyFinished}
+                        />
+                    ) : (
+                        <FeeTemplateForm
+                            template={editing}
+                            classes={classes}
+                            onSuccess={handleFormSuccess}
+                            onCancel={handleFormCancel}
+                        />
+                    )}
+                </DialogContent>
+            </Dialog>
+
+            {/* Delete confirm */}
+            <ConfirmDialog
+                open={!!deleting}
+                onOpenChange={(o) => !o && setDeleting(null)}
+                title="Delete fee template?"
+                description={
+                    deleting
+                        ? `"${deleting.title}" will be permanently deleted. This cannot be undone. Templates with existing fee instances cannot be deleted.`
+                        : ''
+                }
+                confirmLabel="Delete"
+                variant="destructive"
+                loading={isDeleting}
+                onConfirm={handleDelete}
+            />
+        </div>
+    );
 }
-
-export default FeeTemplates

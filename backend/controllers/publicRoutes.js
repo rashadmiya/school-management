@@ -12,6 +12,9 @@ const StudentCabinet = require('../models/StudentCabinet');
 const Club = require('../models/Club');
 const Section = require('../models/Section');
 
+const ReceiptPdfService = require('../services/pdf/ReceiptPdfService');
+const { verifyReceiptToken } = require('../utils/receiptToken');
+
 // 🎯 Get page by slug
 router.get("/pages/:slug", catchAsyncErrors(async (req, res, next) => {
   try {
@@ -324,6 +327,17 @@ router.get('/directory/stats', catchAsyncErrors(async (req, res, next) => {
       sections: { total: totalSections, active: activeSections }
     }
   });
+}));
+
+router.get('/receipts/:token', catchAsyncErrors(async (req, res) => {
+    const payload = verifyReceiptToken(req.params.token);
+    if (!payload?.pid) {
+        return res.status(401).json({ success: false, message: 'Invalid or expired receipt link' });
+    }
+    const buf = await ReceiptPdfService.generate(payload.pid);
+    res.setHeader('Content-Type', 'application/pdf');
+    res.setHeader('Content-Disposition', `inline; filename="receipt.pdf"`);
+    res.send(buf);
 }));
 
 module.exports = router;

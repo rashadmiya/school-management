@@ -5,6 +5,7 @@ const FeeController = require('../FeeController');
 const { body, param } = require('express-validator');
 const { isAuthenticated, authorizeRoles, isStudentAuthenticated } = require('../../middleware/auth');
 const { isAnyAuthenticated } = require('../../middleware/anyAuth');
+const catchAsyncErrors = require('../../middleware/catchAsyncErrors');
 
 // Fee Templates
 router.post('/templates',
@@ -22,6 +23,27 @@ router.post('/templates',
 router.get('/templates',
     isAuthenticated,
     FeeController.getFeeTemplates
+);
+
+// feeRoutes.js
+router.get('/templates/:id',
+    isAuthenticated,
+    authorizeRoles('admin', 'accountant'),
+    param('id').isMongoId(),
+    catchAsyncErrors(FeeController.getFeeTemplate)
+);
+router.put('/templates/:id',
+    isAuthenticated,
+    authorizeRoles('admin', 'accountant'),
+    param('id').isMongoId(),
+    catchAsyncErrors(FeeController.updateFeeTemplate)
+);
+
+router.delete('/templates/:id',
+    isAuthenticated,
+    authorizeRoles('admin', 'accountant'),
+    param('id').isMongoId(),
+    catchAsyncErrors(FeeController.deleteFeeTemplate)
 );
 
 router.post('/templates/:id/apply',
@@ -44,6 +66,13 @@ router.get('/student/:studentId/summary',
     FeeController.getFeeSummary
 );
 
+router.get('/instances/:id',
+    isAuthenticated,
+    authorizeRoles('admin', 'accountant'),
+    param('id').isMongoId(),
+    catchAsyncErrors(FeeController.getFeeInstance)
+);
+
 // Fee Instances
 router.put('/instances/:id',
     isAuthenticated,
@@ -56,20 +85,20 @@ router.put('/instances/:id',
 // Add these routes before module.exports
 router.get('/templates/:id/eligible-students',
     isAuthenticated,
-    authorizeRoles('admin', 'accountant'),
+    authorizeRoles('admin', 'accountant', 'teacher', 'student'),
     param('id').isMongoId(),
     FeeController.getEligibleStudents
 );
 
 router.get('/current-session',
     isAuthenticated,
-    authorizeRoles('admin', 'accountant'),
+    authorizeRoles('admin', 'accountant', 'teacher', 'student'),
     FeeController.getCurrentSession
 );
 
 router.post('/set-session',
     isAuthenticated,
-    authorizeRoles('admin', 'accountant'),
+    authorizeRoles('admin', 'accountant', 'teacher'),
     [
         body('session').matches(/^\d{4}-\d{4}$/).withMessage('Invalid session format')
     ],

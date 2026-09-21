@@ -5,16 +5,17 @@ import { Button } from "@/components/ui/button";
 import { Search, X, User } from "lucide-react";
 import { useLazyGetParentsInSearchQuery } from "@/features/apis/parentsApi";
 
-export default function ParentSearchSelector({ 
-  selectedParent, 
-  onParentSelect, 
+export default function ParentSearchSelector({
+  theme,
+  selectedParent,
+  onParentSelect,
   onParentClear,
-  className = "" 
+  className = ""
 }) {
   const [searchQuery, setSearchQuery] = useState("");
   const [isSearching, setIsSearching] = useState(false);
   const [searchResults, setSearchResults] = useState([]);
-  
+
   const [searchParents, { isLoading }] = useLazyGetParentsInSearchQuery();
 
   // Debounced search
@@ -27,11 +28,11 @@ export default function ParentSearchSelector({
     const searchTimer = setTimeout(async () => {
       setIsSearching(true);
       try {
-        const result = await searchParents({ 
-          search: searchQuery, 
-          limit: 10 
+        const result = await searchParents({
+          search: searchQuery,
+          limit: 10
         }).unwrap();
-        
+
         setSearchResults(result.docs || result.parents || []);
       } catch (error) {
         console.error("Search failed:", error);
@@ -59,7 +60,7 @@ export default function ParentSearchSelector({
   return (
     <div className={`space-y-3 ${className}`}>
       <label className="text-sm font-medium">Parent (Optional)</label>
-      
+
       {/* Selected Parent Display */}
       {selectedParent && (
         <div className="flex items-center justify-between p-3 border rounded-lg bg-blue-50">
@@ -137,8 +138,9 @@ export default function ParentSearchSelector({
       )}
 
       {/* Help Text */}
-      <p className="text-xs text-gray-500">
-        Start typing to search for parents. Leave empty if no parent assignment needed.
+      <p className={`text-xs ${theme.textMuted}`}>
+        Pick an existing parent, or leave empty to auto-create one from the
+        guardian's phone number. If you pick a parent here, it takes precedence.
       </p>
     </div>
   );

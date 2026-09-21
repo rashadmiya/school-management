@@ -1,347 +1,418 @@
-// services/RefundService.js - COMPLETE REWRITE
+// services/RefundService.js (rewritten)
 const mongoose = require('mongoose');
 const Refund = require('../financeSystem/models/Refund');
-const Payment = require("../financeSystem/models/Payment")
+const Payment = require('../financeSystem/models/Payment');
 const PaymentAllocation = require('../financeSystem/models/PaymentAllocation');
 const FeeInstance = require('../financeSystem/models/FeeInstance');
 const AdvanceBalance = require('../financeSystem/models/AdvanceBalance');
-const LedgerService = require('./LedgerService');
+const StudentFinanceSummaryService = require('./StudentFinanceSummaryService');
 const TransactionService = require('./TransactionService');
+const { toDecimal, toDecimal128, min } = require('../utils/decimal');
+const AuditService = require('../financeSystem/services/AuditService')
+const NotificationService = require('../financeSystem/services/NotificationService');
+const Student = require('../models/Student');
 
 class RefundService {
-    static async processRefund(refundData, userId) {
-        const session = await mongoose.startSession();
-        
+    /**
+     * STEP 1: request — no money moves yet.
+     */
+    static async requestRefund({ paymentId, amount, reason, description }, userId, idempotencyKey = undefined) {
+        const payment = await Payment.findById(paymentId);
+        if (!payment) throw new Error('Payment not found');
+        if (payment.status === 'voided') throw new Error('Cannot refund a voided payment');
+
+        const refundAmount = toDecimal(amount);
+        if (refundAmount.lte(0)) throw new Error('Amount must be positive');
+
+        const refundable = toDecimal(payment.amount).minus(toDecimal(payment.refundedAmount));
+        if (refundAmount.gt(refundable)) {
+            throw new Error(`Max refundable is ${refundable.toString()}`);
+        }
+
+        if (idempotencyKey) {
+            const existing = await Refund.findOne({ idempotencyKey });
+            if (existing) return existing;
+        }
+
+        const refundDoc = {
+            student: payment.student,
+            payment: paymentId,
+            amount: toDecimal128(refundAmount),
+            reason,
+            description,
+            status: 'pending',
+            requestedBy: userId,
+            requestedAt: new Date(),
+            session: payment.session,
+        };
+
+        if (idempotencyKey) refundDoc.idempotencyKey = idempotencyKey;
+        const [refund] = await Refund.create([refundDoc]);
+
+        // requestRefund — after Refund.create
+        await AuditService.record({
+            action: 'refund.requested',
+            actor: userId,
+            student: refund.student,
+            refModel: 'Refund',
+            refId: refund._id,
+            after: { amount: refund.amount.toString(), reason },
+            session: refund.session,
+            reason,
+        });
+
+        return refund;
+    }
+
+    /**
+     * STEP 2: approve — no money moves yet.
+     */
+    static async approveRefund(refundId, userId, remarks = '') {
+        const refund = await Refund.findById(refundId);
+        if (!refund) throw new Error('Refund not found');
+        if (refund.status !== 'pending') throw new Error(`Cannot approve refund in status ${refund.status}`);
+
+        refund.status = 'approved';
+        refund.approvedBy = userId;
+        refund.approvedAt = new Date();
+        refund.revisionHistory.push({
+            changedBy: userId,
+            changedAt: new Date(),
+            changes: { status: 'approved' },
+            reason: remarks || 'Approved',
+        });
+        await refund.save();
+
+        // approveRefund
+        await AuditService.record({
+            action: 'refund.approved',
+            actor: userId,
+            student: refund.student,
+            refModel: 'Refund',
+            refId: refund._id,
+            session: refund.session,
+            notes: remarks,
+        });
+
+        return refund;
+    }
+
+    /**
+     * STEP 3: reject.
+     */
+    static async rejectRefund(refundId, userId, reason) {
+        if (!reason) throw new Error('Rejection reason is required');
+        const refund = await Refund.findById(refundId);
+        if (!refund) throw new Error('Refund not found');
+        if (refund.status !== 'pending') throw new Error(`Cannot reject refund in status ${refund.status}`);
+
+        refund.status = 'rejected';
+        refund.rejectedBy = userId;
+        refund.rejectedAt = new Date();
+        refund.rejectionReason = reason;
+        refund.revisionHistory.push({
+            changedBy: userId,
+            changedAt: new Date(),
+            changes: { status: 'rejected' },
+            reason,
+        });
+        await refund.save();
+
+        // rejectRefund
+        await AuditService.record({
+            action: 'refund.rejected',
+            actor: userId,
+            student: refund.student,
+            refModel: 'Refund',
+            refId: refund._id,
+            session: refund.session,
+            reason,
+        });
+
+        return refund;
+    }
+
+    /**
+     * STEP 4: process — this is where money actually moves.
+     * Requires status = approved.
+     */
+    static async processRefund(refundId, methodData, userId) {
+        const dbSession = await mongoose.startSession();
+
         try {
-            session.startTransaction();
-            
-            const { paymentId, amount, reason, description } = refundData;
-            
-            // Validate
-            if (amount <= 0) throw new Error('Refund amount must be positive');
-            
-            // Get payment
-            const payment = await Payment.findById(paymentId).session(session);
+            dbSession.startTransaction();
+
+            const refund = await Refund.findById(refundId).session(dbSession);
+            if (!refund) throw new Error('Refund not found');
+            if (refund.status !== 'approved') {
+                throw new Error(`Refund must be approved first (current: ${refund.status})`);
+            }
+
+            const payment = await Payment.findById(refund.payment).session(dbSession);
             if (!payment) throw new Error('Payment not found');
-            
-            if (payment.status === 'reversed') {
-                throw new Error('Payment has already been reversed');
+
+            const amount = toDecimal(refund.amount);
+
+            // Re-check refundable
+            const refundable = toDecimal(payment.amount).minus(toDecimal(payment.refundedAmount));
+            if (amount.gt(refundable)) {
+                throw new Error(`Payment refundable amount has changed. Max: ${refundable.toString()}`);
             }
-            
-            // Check refundable amount
-            const refundableAmount = payment.amount - payment.refundedAmount;
-            if (amount > refundableAmount) {
-                throw new Error(`Maximum refundable amount is ${refundableAmount}`);
-            }
-            
-            // Generate transaction ID
+
             const transactionId = await TransactionService.createTransactionId('refund', userId);
-            
             await TransactionService.beginTransaction(transactionId, 'refund', {
-                userId,
-                paymentId,
-                amount
+                userId, refundId, amount: amount.toString(),
             });
-            
-            // Create refund record
-            const refund = new Refund({
-                student: payment.student,
-                payment: paymentId,
-                amount,
-                reason,
-                description,
-                refundedBy: userId,
-                transactionId,
-                session: payment.session
-            });
-            
-            await refund.save({ session });
-            
-            // Update payment refund tracking
-            payment.refundedAmount += amount;
-            if (payment.refundedAmount >= payment.amount) {
+
+            // Sequential refund number
+            refund.refundNumber = await Refund.generateRefundNumber(refund.session, dbSession);
+
+            // Update payment refund totals
+            payment.refundedAmount = toDecimal128(toDecimal(payment.refundedAmount).plus(amount));
+            if (toDecimal(payment.refundedAmount).gte(toDecimal(payment.amount))) {
                 payment.isFullyRefunded = true;
             }
-            
-            await payment.save({ session });
-            
-            // Handle refund allocation (reverse allocations if needed)
-            const allocationResult = await this.handleRefundAllocation(
-                paymentId,
-                amount,
-                refund._id,
-                transactionId,
-                userId,
-                payment.session,
-                session
+            await payment.save({ session: dbSession });
+
+            // Reverse allocations LIFO
+            const reverseResult = await this._reverseAllocations(
+                refund.payment, amount, refund._id, transactionId, userId, refund.session, dbSession
             );
-            
-            // Create ledger entry for refund
-            await LedgerService.createEntry({
-                student: payment.student,
+
+            // Advance deduction if any remaining
+            let advanceDeducted = toDecimal(0);
+            if (reverseResult.remaining.gt(0)) {
+                const updated = await AdvanceBalance.findOneAndUpdate(
+                    {
+                        student: refund.student,
+                        session: refund.session,
+                        amount: { $gte: toDecimal128(reverseResult.remaining) },
+                    },
+                    {
+                        $inc: { amount: toDecimal128(reverseResult.remaining.negated()) },
+                        $set: { lastUpdated: new Date() },
+                        $push: {
+                            transactions: {
+                                type: 'debit',
+                                amount: toDecimal128(reverseResult.remaining),
+                                refundId: refund._id,
+                                transactionId,
+                                description: `Refund deduction ${refund.refundNumber}`,
+                                createdAt: new Date(),
+                            },
+                        },
+                    },
+                    { new: true, session: dbSession }
+                );
+                if (!updated) {
+                    throw new Error('Insufficient advance balance to complete refund');
+                }
+                advanceDeducted = reverseResult.remaining;
+            }
+
+            // Update refund
+            refund.status = 'processed';
+            refund.processedBy = userId;
+            refund.processedAt = new Date();
+            refund.method = methodData.method;
+            refund.methodDetails = methodData.methodDetails;
+            refund.reference = methodData.reference;
+            refund.transactionId = transactionId;
+            refund.revisionHistory.push({
+                changedBy: userId,
+                changedAt: new Date(),
+                changes: { status: 'processed' },
+                reason: 'Processed',
+            });
+            await refund.save({ session: dbSession });
+
+            // Summary + ledger — refund re-opens debt
+            // await StudentFinanceSummaryService.recordMovement({
+            //     student: refund.student,
+            //     session: refund.session,
+            //     transactionId,
+            //     type: 'refund',
+            //     debit: toDecimal128(amount),
+            //     refModel: 'Refund',
+            //     refId: refund._id,
+            //     description: `Refund ${refund.refundNumber}: ${refund.reason}`,
+            //     createdBy: userId,
+            //     summaryDelta: {
+            //         refunded: amount,
+            //         paid: reverseResult.reversedAmount.negated(),
+            //         advanceBalance: advanceDeducted.negated(),
+            //     },
+            // }, dbSession);
+            await StudentFinanceSummaryService.recordMovement({
+                student: refund.student,
+                session: refund.session,
                 transactionId,
                 type: 'refund',
-                debit: amount,
+                debit: toDecimal128(reverseResult.reversedAmount),   // ← was `amount`
                 refModel: 'Refund',
                 refId: refund._id,
-                description: `Refund: ${reason}`,
+                description: `Refund ${refund.refundNumber}: ${refund.reason}`,
                 createdBy: userId,
-                session: payment.session
-            }, session);
-            
-            // Handle any remaining amount as advance deduction
-            if (allocationResult.remaining > 0) {
-                await this.deductFromAdvanceBalance(
-                    payment.student,
-                    allocationResult.remaining,
-                    refund._id,
-                    transactionId,
-                    userId,
-                    payment.session,
-                    session
-                );
-            }
-            
+                summaryDelta: {
+                    refunded: amount,
+                    paid: reverseResult.reversedAmount.negated(),
+                    advanceBalance: advanceDeducted.negated(),
+                },
+            }, dbSession);
+
+            // processRefund — inside the transaction, before completeTransaction
+            await AuditService.record({
+                action: 'refund.processed',
+                actor: userId,
+                student: refund.student,
+                refModel: 'Refund',
+                refId: refund._id,
+                refNumber: refund.refundNumber,
+                after: {
+                    method: refund.method,
+                    amount: refund.amount.toString(),
+                    reversed: reverseResult.reversedAmount.toString(),
+                    advanceDeducted: advanceDeducted.toString(),
+                },
+                session: refund.session,
+                transactionId,
+            }, dbSession);
+
             await TransactionService.completeTransaction(transactionId, {
                 refundId: refund._id,
-                reversedAllocations: allocationResult.reversedAllocations,
-                advanceDeducted: allocationResult.remaining
+                reversed: reverseResult.reversedAmount.toString(),
+                advanceDeducted: advanceDeducted.toString(),
             });
-            
-            await session.commitTransaction();
-            
+
+            await dbSession.commitTransaction();
+
+            try {
+                const student = await Student.findById(refund.student)
+                    .populate('parent')
+                    .lean();
+
+                await NotificationService.notifyRefundProcessed({
+                    refund,
+                    student,
+                    parent: student?.parent,
+                    payment,
+                });
+            } catch (err) {
+                console.error('[refund] notification failed', err);
+            }
+
             return {
                 refund,
-                allocationResult
+                reversedAmount: reverseResult.reversedAmount,
+                advanceDeducted,
             };
-            
+
         } catch (error) {
-            await session.abortTransaction();
-            
-            if (error.transactionId) {
-                await TransactionService.failTransaction(error.transactionId, error);
-            }
-            
+            await dbSession.abortTransaction();
             throw error;
         } finally {
-            session.endSession();
+            dbSession.endSession();
         }
     }
 
-    static async handleRefundAllocation(paymentId, refundAmount, refundId, transactionId, userId, sessionYear, dbSession) {
-        let remaining = refundAmount;
+    static async _reverseAllocations(paymentId, refundAmount, refundId, transactionId, userId, sessionYear, dbSession) {
+        let remaining = toDecimal(refundAmount);
+        let reversedAmount = toDecimal(0);
         const reversedAllocations = [];
-        
-        // Get allocations for this payment, newest first (LIFO)
+
         const allocations = await PaymentAllocation.find({
             payment: paymentId,
-            isReversed: false
-        })
-        .sort({ _id: -1 })
-        .session(dbSession);
-        
-        for (const allocation of allocations) {
-            if (remaining <= 0) break;
-            
-            const feeInstance = await FeeInstance.findById(allocation.feeInstance).session(dbSession);
-            if (!feeInstance) continue;
-            
-            // Determine how much to reverse from this allocation
-            const maxReversible = Math.min(allocation.amount, feeInstance.paidAmount, remaining);
-            
-            if (maxReversible <= 0) continue;
-            
-            // Update fee instance
-            feeInstance.paidAmount -= maxReversible;
-            feeInstance.dueAmount = feeInstance.totalAmount - feeInstance.paidAmount - feeInstance.waivedAmount - feeInstance.advanceUsed;
-            
-            // Update status
-            if (feeInstance.paidAmount <= 0 && feeInstance.waivedAmount <= 0 && feeInstance.advanceUsed <= 0) {
-                feeInstance.status = 'unpaid';
-                feeInstance.paidDate = null;
-            } else if (feeInstance.paidAmount > 0) {
-                feeInstance.status = 'partial';
+            isReversed: false,
+        }).sort({ _id: -1 }).session(dbSession);
+
+        // for (const alloc of allocations) {
+        //     if (remaining.lte(0)) break;
+
+        //     const fee = await FeeInstance.findById(alloc.feeInstance).session(dbSession);
+        //     if (!fee) continue;
+
+        //     const maxReversible = min(
+        //         min(toDecimal(alloc.amount), toDecimal(fee.paidAmount)),
+        //         remaining
+        //     );
+        //     if (maxReversible.lte(0)) continue;
+
+        //     fee.paidAmount = toDecimal128(toDecimal(fee.paidAmount).minus(maxReversible));
+        //     fee.recalculate();
+        //     await fee.save({ session: dbSession });
+
+        //     alloc.isReversed = true;
+        //     alloc.reversalTransactionId = transactionId;
+        //     alloc.reversalReason = `Refund ${refundId}`;
+        //     alloc.reversedAt = new Date();
+        //     alloc.reversedBy = userId;
+        //     await alloc.save({ session: dbSession });
+
+        //     reversedAllocations.push({
+        //         allocationId: alloc._id,
+        //         feeInstanceId: fee._id,
+        //         amount: maxReversible.toString(),
+        //     });
+
+        //     reversedAmount = reversedAmount.plus(maxReversible);
+        //     remaining = remaining.minus(maxReversible);
+        // }
+
+        for (const alloc of allocations) {
+            if (remaining.lte(0)) break;
+
+            const fee = await FeeInstance.findById(alloc.feeInstance).session(dbSession);
+            if (!fee) continue;
+
+            const allocAmount = toDecimal(alloc.amount);
+            const alreadyReversed = toDecimal(alloc.reversedAmount || 0);
+            const remainingOnAlloc = allocAmount.minus(alreadyReversed);
+
+            const maxReversible = min(
+                min(remainingOnAlloc, toDecimal(fee.paidAmount)),
+                remaining
+            );
+            if (maxReversible.lte(0)) continue;
+
+            fee.paidAmount = toDecimal128(toDecimal(fee.paidAmount).minus(maxReversible));
+            fee.recalculate();
+            await fee.save({ session: dbSession });
+
+            alloc.reversedAmount = toDecimal128(alreadyReversed.plus(maxReversible));
+            if (toDecimal(alloc.reversedAmount).gte(allocAmount)) {
+                alloc.isReversed = true;
             }
-            
-            await feeInstance.save({ session: dbSession });
-            
-            // Mark allocation as reversed
-            allocation.isReversed = true;
-            allocation.reversalTransactionId = transactionId;
-            allocation.reversalReason = 'Refund processed';
-            allocation.reversedAt = new Date();
-            allocation.reversedBy = userId;
-            
-            await allocation.save({ session: dbSession });
-            
-            // Create reversed allocation record (optional - for audit)
-            const reversedAllocation = new PaymentAllocation({
-                payment: paymentId,
-                feeInstance: feeInstance._id,
-                student: feeInstance.student,
-                amount: -maxReversible, // Negative amount to indicate reversal
-                allocatedBy: userId,
-                transactionId,
-                isReversed: false, // This is the reversal record itself
-                description: `Reversal of allocation ${allocation._id} due to refund`,
-                session: sessionYear
-            });
-            
-            await reversedAllocation.save({ session: dbSession });
-            
-            // Create ledger entry for reversal
-            await LedgerService.createEntry({
-                student: feeInstance.student,
-                transactionId,
-                type: 'refund',
-                debit: maxReversible,
-                refModel: 'PaymentAllocation',
-                refId: reversedAllocation._id,
-                description: `Refund allocation reversal`,
-                createdBy: userId,
-                session: sessionYear
-            }, dbSession);
-            
-            reversedAllocations.push({
-                allocationId: allocation._id,
-                feeInstanceId: feeInstance._id,
-                amount: maxReversible
-            });
-            
-            remaining -= maxReversible;
+            alloc.reversalTransactionId = transactionId;
+            alloc.reversalReason = `Refund ${refundId}`;
+            alloc.reversedAt = new Date();
+            alloc.reversedBy = userId;
+            await alloc.save({ session: dbSession });
+
+            reversedAmount = reversedAmount.plus(maxReversible);
+            remaining = remaining.minus(maxReversible);
         }
-        
-        return {
-            reversedAllocations,
-            remaining,
-            reversedAmount: refundAmount - remaining
-        };
+        return { reversedAllocations, reversedAmount, remaining };
     }
 
-    static async deductFromAdvanceBalance(studentId, amount, refundId, transactionId, userId, sessionYear, dbSession) {
-        const advanceBalance = await AdvanceBalance.findOne({ student: studentId }).session(dbSession);
-        
-        if (!advanceBalance || advanceBalance.amount < amount) {
-            throw new Error('Insufficient advance balance for refund deduction');
-        }
-        
-        const previousBalance = advanceBalance.amount;
-        const newBalance = previousBalance - amount;
-        
-        // Update advance balance
-        advanceBalance.amount = newBalance;
-        advanceBalance.lastUpdated = new Date();
-        
-        advanceBalance.transactions.push({
-            type: 'debit',
-            amount,
-            previousBalance,
-            newBalance,
-            refundId,
-            transactionId,
-            description: `Advance deducted for refund ${refundId}`,
-            createdAt: new Date()
-        });
-        
-        await advanceBalance.save({ session: dbSession });
-        
-        // Create ledger entry
-        await LedgerService.createEntry({
-            student: studentId,
-            transactionId,
-            type: 'advance_debit',
-            debit: amount,
-            refModel: 'AdvanceBalance',
-            refId: advanceBalance._id,
-            description: `Advance balance deduction for refund`,
-            createdBy: userId,
-            session: sessionYear
-        }, dbSession);
-        
-        return advanceBalance;
+    static async getRefundHistory(studentId, session, limit = 20) {
+        return Refund.find({ student: studentId, session })
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('requestedBy', 'name')
+            .populate('approvedBy', 'name')
+            .populate('processedBy', 'name')
+            .populate('payment', 'amount method receiptNumber')
+            .lean();
     }
 
-    static async getRefundHistory(studentId, sessionYear, limit = 20) {
-        return Refund.find({
-            student: studentId,
-            session: sessionYear
-        })
-        .sort({ createdAt: -1 })
-        .limit(limit)
-        .populate('refundedBy', 'name email')
-        .populate('payment', 'amount method reference')
-        .lean();
-    }
-
-    static async validateRefund(paymentId, amount) {
-        const payment = await Payment.findById(paymentId);
-        if (!payment) return { valid: false, reason: 'Payment not found' };
-        
-        const refundableAmount = payment.amount - payment.refundedAmount;
-        
-        if (amount > refundableAmount) {
-            return {
-                valid: false,
-                reason: `Amount exceeds refundable limit. Maximum: ${refundableAmount}`
-            };
-        }
-        
-        // Check if payment has allocations that can be reversed
-        const allocations = await PaymentAllocation.find({
-            payment: paymentId,
-            isReversed: false
-        });
-        
-        if (allocations.length === 0 && payment.advanceAmount === 0) {
-            return {
-                valid: false,
-                reason: 'Payment has no allocations to reverse'
-            };
-        }
-        
-        return {
-            valid: true,
-            refundableAmount,
-            hasAdvance: payment.advanceAmount > 0
-        };
+    static async listRefunds(query = {}, limit = 50) {
+        return Refund.find(query)
+            .sort({ createdAt: -1 })
+            .limit(limit)
+            .populate('student', 'name rollNumber')
+            .populate('payment', 'amount method receiptNumber')
+            .lean();
     }
 }
 
 module.exports = RefundService;
-
-// const Refund = require("../models/Refund");
-// const LedgerService = require("./LedgerService");
-// const Payment = require("../models/Payment");
-
-// class RefundService {
-
-//   static async refund({ paymentId, amount, reason }, user) {
-//     const payment = await Payment.findById(paymentId);
-//     if (!payment) throw new Error("Payment not found");
-
-//     if (amount <= 0 || amount > payment.amount) {
-//       throw new Error("Invalid refund amount");
-//     }
-
-//     const refund = await Refund.create({
-//       student: payment.student,
-//       payment: payment._id,
-//       amount,
-//       reason,
-//       refundedBy: user._id
-//     });
-
-//     // ledger: refund increases balance again (debit)
-//     await LedgerService.createEntry({
-//       student: payment.student,
-//       type: "refund",
-//       debit: amount,
-//       refModel: "Refund",
-//       refId: refund._id
-//     });
-
-//     return refund;
-//   }
-// }
-
-// module.exports = RefundService;

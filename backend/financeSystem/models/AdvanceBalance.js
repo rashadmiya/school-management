@@ -6,7 +6,6 @@ const advanceBalanceSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId,
         ref: 'Student',
         required: true,
-        unique: true
     },
     amount: {
         type: Number,
@@ -61,7 +60,7 @@ const advanceBalanceSchema = new mongoose.Schema({
 });
 
 // Indexes
-advanceBalanceSchema.index({ student: 1, session: 1 });
+advanceBalanceSchema.index({ student: 1, session: 1 }, { unique: true });
 advanceBalanceSchema.index({ lastUpdated: -1 });
 
 module.exports = mongoose.model('AdvanceBalance', advanceBalanceSchema);

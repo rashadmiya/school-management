@@ -1,275 +1,683 @@
 // components/student/StudentPayments.jsx
+import { useState } from "react";
+import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { useGetStudentPaymentsQuery } from "@/features/apis/studentsApi";
-import { ArrowLeft, Calendar, Download, FileText, Filter } from "lucide-react";
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import {
+    Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+} from "@/components/ui/table";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import {
+    useGetStudentFinanceQuery,
+    useGetStudentWaiversQuery,
+    useGetStudentAdvanceTransactionsQuery,
+    studentStatementUrl,
+} from "@/features/apis/studentsApi";
+import {
+    ArrowLeft, Download, Wallet, FileText, ArrowDownLeft, ArrowUpRight,
+    CreditCard,
+} from "lucide-react";
+import { formatBDT, formatDate } from "@/utils/formatCurrency";
 
 export default function StudentPayments() {
-  const [academicYear, setAcademicYear] = useState(new Date().getFullYear().toString());
-  const [page, setPage] = useState(1);
-  const [statusFilter, setStatusFilter] = useState("all");
-  
-  const { data, isLoading } = useGetStudentPaymentsQuery({ 
-    academicYear, 
-    page, 
-    limit: 10 
-  });
+    const [session] = useState(undefined); // use server default
 
-  if (isLoading) return <div className="flex justify-center py-8">Loading payments...</div>;
+    const { data, isLoading, error } = useGetStudentFinanceQuery({ session });
+    const { data: waiversData, isLoading: loadingWaivers } =
+        useGetStudentWaiversQuery({ session });
+    const { data: advanceData, isLoading: loadingAdvance } =
+        useGetStudentAdvanceTransactionsQuery({ session });
 
-  const { payments, summary, pagination, student } = data || {};
-
-  const getStatusColor = (status) => {
-    switch (status) {
-      case 'paid': return 'bg-green-100 text-green-800';
-      case 'pending': return 'bg-yellow-100 text-yellow-800';
-      case 'overdue': return 'bg-red-100 text-red-800';
-      case 'partial': return 'bg-blue-100 text-blue-800';
-      default: return 'bg-gray-100 text-gray-800';
+    if (isLoading) {
+        return <div className="flex justify-center py-8">Loading payments…</div>;
     }
-  };
-
-  const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('en-US', {
-      style: 'currency',
-      currency: 'USD'
-    }).format(amount || 0);
-  };
-
-  // Filter payments by status
-  const filteredPayments = statusFilter === "all" 
-    ? payments 
-    : payments?.filter(payment => payment.status === statusFilter);
-
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-4">
-          <Button variant="outline" size="sm" asChild>
-            <Link to="/student">
-              <ArrowLeft className="w-4 h-4 mr-2" />
-              Back to Dashboard
-            </Link>
-          </Button>
-          <div>
-            <h1 className="text-2xl font-bold">My Payments</h1>
-            <p className="text-gray-600">View and manage your fee payments</p>
-          </div>
-        </div>
-        <Button asChild>
-          <Link to="/student/payments/export">
-            <Download className="w-4 h-4 mr-2" />
-            Export Report
-          </Link>
-        </Button>
-      </div>
-
-      {/* Filters */}
-      <Card>
-        <CardContent className="p-6">
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="space-y-2">
-              <Label>Academic Year</Label>
-              <Input
-                type="text"
-                value={academicYear}
-                onChange={(e) => setAcademicYear(e.target.value)}
-                placeholder="e.g., 2024"
-              />
+    if (error) {
+        return (
+            <div className="text-center py-8 text-red-500">
+                {error?.data?.message || "Failed to load payments"}
             </div>
+        );
+    }
 
-            <div className="space-y-2">
-              <Label>Payment Status</Label>
-              <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                  <SelectValue placeholder="All Status" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Status</SelectItem>
-                  <SelectItem value="paid">Paid</SelectItem>
-                  <SelectItem value="pending">Pending</SelectItem>
-                  <SelectItem value="overdue">Overdue</SelectItem>
-                  <SelectItem value="partial">Partial</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
+    const {
+        summary = {},
+        bills = [],
+        payments = [],
+        advance = {},
+        session: activeSession,
+    } = data || {};
 
-            <div className="space-y-2">
-              <Label>Actions</Label>
-              <Button variant="outline" className="w-full flex items-center gap-2">
-                <Filter className="w-4 h-4" />
-                Apply Filters
-              </Button>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+    const waivers = waiversData?.waivers || [];
+    const advanceTxns = advanceData?.transactions || [];
 
-      {/* Summary Cards */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-        <Card>
-          <CardContent className="p-6 text-center">
-            <span className="mr-2 mx-auto text-blue-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
-            <p className="text-2xl font-bold">{formatCurrency(summary?.totalDue)}</p>
-            <p className="text-sm text-gray-600">Total Due</p>
-          </CardContent>
-        </Card>
+    const dueBalance = Number(summary?.dueBalance || 0);
+    const statusColor = (status) => ({
+        clear: "bg-green-100 text-green-800",
+        advanced: "bg-blue-100 text-blue-800",
+        due: "bg-amber-100 text-amber-800",
+        overdue: "bg-red-100 text-red-800",
+        paid: "bg-green-100 text-green-800",
+        partial: "bg-blue-100 text-blue-800",
+        unpaid: "bg-gray-100 text-gray-800",
+        revoked: "bg-red-100 text-red-800",
+        approved: "bg-green-100 text-green-800",
+    }[status] || "bg-gray-100 text-gray-800");
 
-        <Card>
-          <CardContent className="p-6 text-center">
-            <span className="mr-2 mx-auto text-green-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
-            <p className="text-2xl font-bold">{formatCurrency(summary?.totalPaid)}</p>
-            <p className="text-sm text-gray-600">Total Paid</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <span className="mr-2 mx-auto text-red-600 m-8 h-8 text-muted-foreground text-lg">৳</span>
-            <p className="text-2xl font-bold">{formatCurrency(summary?.outstanding)}</p>
-            <p className="text-sm text-gray-600">Outstanding</p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardContent className="p-6 text-center">
-            <FileText className="w-8 h-8 text-purple-600 mx-auto mb-2" />
-            <p className="text-2xl font-bold">{summary?.collectionRate || 0}%</p>
-            <p className="text-sm text-gray-600">Collection Rate</p>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Status Breakdown */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Badge className="bg-green-100 text-green-800 w-full justify-center">
-              Paid: {summary?.statusCounts?.paid || 0}
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Badge className="bg-yellow-100 text-yellow-800 w-full justify-center">
-              Pending: {summary?.statusCounts?.pending || 0}
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Badge className="bg-red-100 text-red-800 w-full justify-center">
-              Overdue: {summary?.statusCounts?.overdue || 0}
-            </Badge>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent className="p-4 text-center">
-            <Badge className="bg-blue-100 text-blue-800 w-full justify-center">
-              Partial: {summary?.statusCounts?.partial || 0}
-            </Badge>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Payments Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Payment History</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fee Type</TableHead>
-                <TableHead>Amount</TableHead>
-                <TableHead>Paid Amount</TableHead>
-                <TableHead>Due Date</TableHead>
-                <TableHead>Paid Date</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Receipt</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {filteredPayments?.map((payment) => (
-                <TableRow key={payment._id}>
-                  <TableCell className="capitalize">{payment.feeType}</TableCell>
-                  <TableCell>{formatCurrency(payment.amount)}</TableCell>
-                  <TableCell className={
-                    payment.paidAmount > 0 ? "text-green-600 font-semibold" : ""
-                  }>
-                    {formatCurrency(payment.paidAmount)}
-                  </TableCell>
-                  <TableCell>
-                    {payment.dueDate ? new Date(payment.dueDate).toLocaleDateString() : 'N/A'}
-                  </TableCell>
-                  <TableCell>
-                    {payment.paidDate ? new Date(payment.paidDate).toLocaleDateString() : '-'}
-                  </TableCell>
-                  <TableCell>
-                    <Badge className={getStatusColor(payment.status)}>
-                      {payment.status.toUpperCase()}
-                    </Badge>
-                  </TableCell>
-                  <TableCell>
-                    {payment.paidAmount > 0 && (
-                      <Button variant="outline" size="sm" asChild>
-                        <Link to={`/student/payments/receipt/${payment._id}`}>
-                          <Download className="w-3 h-3 mr-1" />
-                          Receipt
+    return (
+        <div className="space-y-6">
+            {/* Header */}
+            <div className="flex items-center justify-between">
+                <div className="flex items-center gap-4">
+                    <Button variant="outline" size="sm" asChild>
+                        <Link to="/student">
+                            <ArrowLeft className="w-4 h-4 mr-2" />
+                            Back to Dashboard
                         </Link>
-                      </Button>
+                    </Button>
+                    <div>
+                        <h1 className="text-2xl font-bold">My Payments</h1>
+                        <p className="text-gray-600">Session {activeSession}</p>
+                    </div>
+                </div>
+
+                <div className="flex gap-2">
+                    <Button asChild variant="outline">
+                        <a
+                            href={studentStatementUrl(activeSession)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                        >
+                            <FileText className="w-4 h-4 mr-2" />
+                            Statement
+                        </a>
+                    </Button>
+                    {dueBalance > 0 && (
+                        <Button asChild className="bg-emerald-600 hover:bg-emerald-700">
+                            <Link to="/student/payments/pay">
+                                <CreditCard className="w-4 h-4 mr-2" />
+                                Pay Online
+                            </Link>
+                        </Button>
                     )}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-
-          {(!filteredPayments || filteredPayments.length === 0) && (
-            <div className="text-center py-8 text-gray-500">
-              <Calendar className="w-12 h-12 text-gray-300 mx-auto mb-4" />
-              <p>No payment records found</p>
-              <p className="text-sm">Try adjusting your filters</p>
+                </div>
             </div>
-          )}
 
-          {/* Pagination */}
-          {pagination && pagination.totalPages > 1 && (
-            <div className="flex items-center justify-between mt-4">
-              <div className="text-sm text-gray-600">
-                Showing {((page - 1) * 10) + 1} to {Math.min(page * 10, pagination.totalPayments)} of {pagination.totalPayments} payments
-              </div>
-              <div className="flex gap-2">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!pagination.hasPrev}
-                  onClick={() => setPage(page - 1)}
-                >
-                  Previous
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  disabled={!pagination.hasNext}
-                  onClick={() => setPage(page + 1)}
-                >
-                  Next
-                </Button>
-              </div>
+            {/* Summary cards */}
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <Card>
+                    <CardContent className="p-5 text-center">
+                        <p className="text-sm text-gray-600">Total Billed</p>
+                        <p className="text-2xl font-bold">{formatBDT(summary?.totalFee)}</p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-5 text-center">
+                        <p className="text-sm text-gray-600">Total Paid</p>
+                        <p className="text-2xl font-bold text-green-600">
+                            {formatBDT(summary?.totalPaid)}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-5 text-center">
+                        <p className="text-sm text-gray-600">Outstanding</p>
+                        <p className={`text-2xl font-bold ${dueBalance > 0 ? "text-rose-600" : "text-gray-700"}`}>
+                            {formatBDT(dueBalance)}
+                        </p>
+                    </CardContent>
+                </Card>
+                <Card>
+                    <CardContent className="p-5 text-center">
+                        <p className="text-sm text-gray-600">Advance Balance</p>
+                        <p className="text-2xl font-bold text-blue-600">
+                            {formatBDT(advance?.amount)}
+                        </p>
+                    </CardContent>
+                </Card>
             </div>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
+
+            {/* Tabs */}
+            <Tabs defaultValue="overview" className="space-y-4">
+                <TabsList>
+                    <TabsTrigger value="overview">Overview</TabsTrigger>
+                    <TabsTrigger value="receipts">Receipts</TabsTrigger>
+                    <TabsTrigger value="waivers">
+                        Waivers {waivers.length > 0 && `(${waivers.length})`}
+                    </TabsTrigger>
+                    <TabsTrigger value="advance">Advance</TabsTrigger>
+                </TabsList>
+
+                {/* ---------------- OVERVIEW ---------------- */}
+                <TabsContent value="overview" className="space-y-4">
+                    {bills.length === 0 ? (
+                        <Card>
+                            <CardContent className="py-10 text-center text-gray-500 text-sm">
+                                No bills for this session.
+                            </CardContent>
+                        </Card>
+                    ) : (
+                        bills.map((bill) => (
+                            <Card key={bill.monthKey} className="overflow-hidden">
+                                <div className="flex items-center justify-between bg-gray-50 px-4 py-3 border-b">
+                                    <div className="font-medium">{bill.monthLabel}</div>
+                                    <div className="flex items-center gap-3 text-sm">
+                                        <Badge className={statusColor(bill.status)}>
+                                            {bill.status.toUpperCase()}
+                                        </Badge>
+                                        <span>
+                                            Total <strong>{formatBDT(bill.total)}</strong>
+                                            {" · "}
+                                            Paid <strong className="text-green-600">{formatBDT(bill.paid)}</strong>
+                                            {Number(bill.due) > 0 && (
+                                                <>
+                                                    {" · "}
+                                                    Due <strong className="text-rose-600">{formatBDT(bill.due)}</strong>
+                                                </>
+                                            )}
+                                        </span>
+                                    </div>
+                                </div>
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Fee</TableHead>
+                                            <TableHead>Due Date</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                            <TableHead className="text-right">Paid</TableHead>
+                                            <TableHead className="text-right">Waived</TableHead>
+                                            <TableHead className="text-right">Advance</TableHead>
+                                            <TableHead className="text-right">Due</TableHead>
+                                            <TableHead>Status</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {bill.items.map((item) => (
+                                            <TableRow key={item._id}>
+                                                <TableCell className="font-medium">
+                                                    <Link
+                                                        to={`/student/payments/fees/${item._id}`}
+                                                        className="text-blue-600 hover:underline"
+                                                    >
+                                                        {item.title}
+                                                    </Link>
+                                                </TableCell>
+                                                <TableCell>{formatDate(item.dueDate)}</TableCell>
+                                                <TableCell className="text-right">
+                                                    {formatBDT(item.totalAmount)}
+                                                </TableCell>
+                                                <TableCell className="text-right text-green-600">
+                                                    {formatBDT(item.paidAmount)}
+                                                </TableCell>
+                                                <TableCell className="text-right text-purple-600">
+                                                    {formatBDT(item.waivedAmount)}
+                                                </TableCell>
+                                                <TableCell className="text-right text-blue-600">
+                                                    {formatBDT(item.advanceUsed)}
+                                                </TableCell>
+                                                <TableCell className={`text-right font-medium ${Number(item.dueAmount) > 0 ? "text-rose-600" : "text-gray-500"
+                                                    }`}>
+                                                    {formatBDT(item.dueAmount)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline">{item.status}</Badge>
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            </Card>
+                        ))
+                    )}
+                </TabsContent>
+
+                {/* ---------------- RECEIPTS ---------------- */}
+                <TabsContent value="receipts">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Payment History</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {payments.length === 0 ? (
+                                <p className="text-center py-6 text-gray-500 text-sm">
+                                    No payments recorded yet.
+                                </p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Receipt</TableHead>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Method</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead />
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {payments.map((p) => (
+                                            <TableRow key={p._id}>
+                                                <TableCell className="font-mono text-sm">
+                                                    {p.receiptNumber}
+                                                </TableCell>
+                                                <TableCell>{formatDate(p.createdAt)}</TableCell>
+                                                <TableCell className="capitalize">
+                                                    {String(p.method).replace("_", " ")}
+                                                </TableCell>
+                                                <TableCell className="text-right font-semibold">
+                                                    {formatBDT(p.amount)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge variant="outline">{p.status}</Badge>
+                                                </TableCell>
+                                                <TableCell>
+                                                    {p.status === "completed" && (
+                                                        <Button variant="outline" size="sm" asChild>
+                                                            <a
+                                                                href={`${import.meta.env.VITE_API_URL}/pdf/receipt/${p._id}`}
+                                                                target="_blank"
+                                                                rel="noopener noreferrer"
+                                                            >
+                                                                <Download className="w-3 h-3 mr-1" />
+                                                                Receipt
+                                                            </a>
+                                                        </Button>
+                                                    )}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ---------------- WAIVERS ---------------- */}
+                <TabsContent value="waivers">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Waivers & Scholarships</CardTitle>
+                        </CardHeader>
+                        <CardContent>
+                            {loadingWaivers ? (
+                                <p className="text-center py-6 text-gray-500 text-sm">Loading…</p>
+                            ) : waivers.length === 0 ? (
+                                <p className="text-center py-6 text-gray-500 text-sm">
+                                    No waivers applied to your account.
+                                </p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Applied To</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                            <TableHead>Status</TableHead>
+                                            <TableHead>Approved</TableHead>
+                                            <TableHead>Reason</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {waivers.map((w) => (
+                                            <TableRow key={w._id}>
+                                                <TableCell className="font-medium">
+                                                    {w.feeInstance?.title || "—"}
+                                                </TableCell>
+                                                <TableCell className="capitalize">
+                                                    {String(w.type).replace("_", " ")}
+                                                </TableCell>
+                                                <TableCell className="text-right text-purple-600 font-medium">
+                                                    {formatBDT(w.amount)}
+                                                </TableCell>
+                                                <TableCell>
+                                                    <Badge className={statusColor(w.status)}>
+                                                        {w.status}
+                                                    </Badge>
+                                                </TableCell>
+                                                <TableCell>{formatDate(w.approvedDate)}</TableCell>
+                                                <TableCell className="max-w-xs truncate text-sm text-gray-600">
+                                                    {w.reason}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+
+                {/* ---------------- ADVANCE ---------------- */}
+                <TabsContent value="advance">
+                    <Card>
+                        <CardHeader className="flex flex-row items-center justify-between">
+                            <CardTitle>Advance Balance</CardTitle>
+                            <div className="text-right">
+                                <p className="text-sm text-gray-500">Current balance</p>
+                                <p className="text-xl font-bold text-blue-600">
+                                    {formatBDT(advance.amount)}
+                                </p>
+                            </div>
+                        </CardHeader>
+                        <CardContent>
+                            {loadingAdvance ? (
+                                <p className="text-center py-6 text-gray-500 text-sm">Loading…</p>
+                            ) : advanceTxns.length === 0 ? (
+                                <p className="text-center py-6 text-gray-500 text-sm">
+                                    No advance transactions yet.
+                                </p>
+                            ) : (
+                                <Table>
+                                    <TableHeader>
+                                        <TableRow>
+                                            <TableHead>Date</TableHead>
+                                            <TableHead>Type</TableHead>
+                                            <TableHead>Description</TableHead>
+                                            <TableHead className="text-right">Amount</TableHead>
+                                        </TableRow>
+                                    </TableHeader>
+                                    <TableBody>
+                                        {advanceTxns.map((t) => (
+                                            <TableRow key={t._id}>
+                                                <TableCell>{formatDate(t.createdAt)}</TableCell>
+                                                <TableCell>
+                                                    <div className="flex items-center gap-1.5">
+                                                        {t.type === "credit" ? (
+                                                            <ArrowDownLeft className="w-4 h-4 text-green-600" />
+                                                        ) : (
+                                                            <ArrowUpRight className="w-4 h-4 text-rose-600" />
+                                                        )}
+                                                        <span className="capitalize">{t.type}</span>
+                                                    </div>
+                                                </TableCell>
+                                                <TableCell className="text-sm text-gray-600 max-w-md truncate">
+                                                    {t.description || "—"}
+                                                </TableCell>
+                                                <TableCell className={`text-right font-medium ${t.type === "credit" ? "text-green-600" : "text-rose-600"
+                                                    }`}>
+                                                    {t.type === "credit" ? "+" : "−"}
+                                                    {formatBDT(t.amount)}
+                                                </TableCell>
+                                            </TableRow>
+                                        ))}
+                                    </TableBody>
+                                </Table>
+                            )}
+                        </CardContent>
+                    </Card>
+                </TabsContent>
+            </Tabs>
+
+            {/* Persistent advance reminder */}
+            {Number(advance.amount) > 0 && (
+                <Card>
+                    <CardContent className="p-5 flex items-center gap-3">
+                        <Wallet className="w-5 h-5 text-blue-600" />
+                        <div>
+                            <p className="text-sm text-gray-600">Advance balance available</p>
+                            <p className="font-semibold">
+                                {formatBDT(advance.amount)} — will be auto-applied to future fees.
+                            </p>
+                        </div>
+                    </CardContent>
+                </Card>
+            )}
+        </div>
+    );
 }
+
+// // components/student/StudentPayments.jsx
+// import { Badge } from "@/components/ui/badge";
+// import { Button } from "@/components/ui/button";
+// import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+// import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+// import { useGetStudentFinanceQuery } from "@/features/apis/studentsApi";
+// import { ArrowLeft, Download, Wallet } from "lucide-react";
+// import { Link } from "react-router-dom";
+// import { formatBDT, formatDate } from "@/utils/formatCurrency";
+
+// export default function StudentPayments() {
+//     const { data, isLoading, error } = useGetStudentFinanceQuery({});
+
+//     if (isLoading) {
+//         return <div className="flex justify-center py-8">Loading payments…</div>;
+//     }
+//     if (error) {
+//         return (
+//             <div className="text-center py-8 text-red-500">
+//                 {error?.data?.message || "Failed to load payments"}
+//             </div>
+//         );
+//     }
+
+//     const {
+//         summary = {},
+//         bills = [],
+//         payments = [],
+//         advance = {},
+//         session,
+//     } = data || {};
+
+//     const dueBalance = Number(summary.dueBalance || 0);
+//     const statusColor = (status) => ({
+//         clear: "bg-green-100 text-green-800",
+//         advanced: "bg-blue-100 text-blue-800",
+//         due: "bg-amber-100 text-amber-800",
+//         overdue: "bg-red-100 text-red-800",
+//         paid: "bg-green-100 text-green-800",
+//         partial: "bg-blue-100 text-blue-800",
+//         unpaid: "bg-gray-100 text-gray-800",
+//     }[status] || "bg-gray-100 text-gray-800");
+
+//     return (
+//         <div className="space-y-6">
+//             {/* Header */}
+//             <div className="flex items-center justify-between">
+//                 <div className="flex items-center gap-4">
+//                     <Button variant="outline" size="sm" asChild>
+//                         <Link to="/student">
+//                             <ArrowLeft className="w-4 h-4 mr-2" />
+//                             Back to Dashboard
+//                         </Link>
+//                     </Button>
+//                     <div>
+//                         <h1 className="text-2xl font-bold">My Payments</h1>
+//                         <p className="text-gray-600">Session {session}</p>
+//                     </div>
+//                 </div>
+//             </div>
+
+//             {/* Summary */}
+//             <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+//                 <Card>
+//                     <CardContent className="p-5 text-center">
+//                         <p className="text-sm text-gray-600">Total Billed</p>
+//                         <p className="text-2xl font-bold">{formatBDT(summary.totalFee)}</p>
+//                     </CardContent>
+//                 </Card>
+//                 <Card>
+//                     <CardContent className="p-5 text-center">
+//                         <p className="text-sm text-gray-600">Total Paid</p>
+//                         <p className="text-2xl font-bold text-green-600">
+//                             {formatBDT(summary.totalPaid)}
+//                         </p>
+//                     </CardContent>
+//                 </Card>
+//                 <Card>
+//                     <CardContent className="p-5 text-center">
+//                         <p className="text-sm text-gray-600">Outstanding</p>
+//                         <p className={`text-2xl font-bold ${dueBalance > 0 ? "text-rose-600" : "text-gray-700"}`}>
+//                             {formatBDT(dueBalance)}
+//                         </p>
+//                     </CardContent>
+//                 </Card>
+//                 <Card>
+//                     <CardContent className="p-5 text-center">
+//                         <p className="text-sm text-gray-600">Advance Balance</p>
+//                         <p className="text-2xl font-bold text-blue-600">
+//                             {formatBDT(advance.amount)}
+//                         </p>
+//                     </CardContent>
+//                 </Card>
+//             </div>
+
+//             {/* Monthly Bills */}
+//             <Card>
+//                 <CardHeader>
+//                     <CardTitle>Monthly Bills</CardTitle>
+//                 </CardHeader>
+//                 <CardContent>
+//                     {bills.length === 0 ? (
+//                         <p className="text-center py-6 text-gray-500 text-sm">
+//                             No bills for this session.
+//                         </p>
+//                     ) : (
+//                         <div className="space-y-4">
+//                             {bills.map((bill) => (
+//                                 <div key={bill.monthKey} className="border rounded-lg overflow-hidden">
+//                                     <div className="flex items-center justify-between bg-gray-50 px-4 py-3">
+//                                         <div className="font-medium">{bill.monthLabel}</div>
+//                                         <div className="flex items-center gap-3 text-sm">
+//                                             <Badge className={statusColor(bill.status)}>
+//                                                 {bill.status.toUpperCase()}
+//                                             </Badge>
+//                                             <span>
+//                                                 Total <strong>{formatBDT(bill.total)}</strong>
+//                                                 {" · "}
+//                                                 Paid <strong className="text-green-600">{formatBDT(bill.paid)}</strong>
+//                                                 {Number(bill.due) > 0 && (
+//                                                     <>
+//                                                         {" · "}
+//                                                         Due <strong className="text-rose-600">{formatBDT(bill.due)}</strong>
+//                                                     </>
+//                                                 )}
+//                                             </span>
+//                                         </div>
+//                                     </div>
+//                                     <Table>
+//                                         <TableHeader>
+//                                             <TableRow>
+//                                                 <TableHead>Fee</TableHead>
+//                                                 <TableHead>Due Date</TableHead>
+//                                                 <TableHead className="text-right">Amount</TableHead>
+//                                                 <TableHead className="text-right">Paid</TableHead>
+//                                                 <TableHead className="text-right">Waived</TableHead>
+//                                                 <TableHead className="text-right">Advance Used</TableHead>
+//                                                 <TableHead className="text-right">Due</TableHead>
+//                                                 <TableHead>Status</TableHead>
+//                                             </TableRow>
+//                                         </TableHeader>
+//                                         <TableBody>
+//                                             {bill.items.map((item) => (
+//                                                 <TableRow key={item._id}>
+//                                                     <TableCell className="font-medium">{item.title}</TableCell>
+//                                                     <TableCell>{formatDate(item.dueDate)}</TableCell>
+//                                                     <TableCell className="text-right">
+//                                                         {formatBDT(item.totalAmount)}
+//                                                     </TableCell>
+//                                                     <TableCell className="text-right text-green-600">
+//                                                         {formatBDT(item.paidAmount)}
+//                                                     </TableCell>
+//                                                     <TableCell className="text-right text-purple-600">
+//                                                         {formatBDT(item.waivedAmount)}
+//                                                     </TableCell>
+//                                                     <TableCell className="text-right text-blue-600">
+//                                                         {formatBDT(item.advanceUsed)}
+//                                                     </TableCell>
+//                                                     <TableCell className={`text-right font-medium ${
+//                                                         Number(item.dueAmount) > 0 ? "text-rose-600" : "text-gray-500"
+//                                                     }`}>
+//                                                         {formatBDT(item.dueAmount)}
+//                                                     </TableCell>
+//                                                     <TableCell>
+//                                                         <Badge variant="outline">{item.status}</Badge>
+//                                                     </TableCell>
+//                                                 </TableRow>
+//                                             ))}
+//                                         </TableBody>
+//                                     </Table>
+//                                 </div>
+//                             ))}
+//                         </div>
+//                     )}
+//                 </CardContent>
+//             </Card>
+
+//             {/* Payment History */}
+//             <Card>
+//                 <CardHeader>
+//                     <CardTitle>Receipts</CardTitle>
+//                 </CardHeader>
+//                 <CardContent>
+//                     {payments.length === 0 ? (
+//                         <p className="text-center py-6 text-gray-500 text-sm">
+//                             No payments recorded yet.
+//                         </p>
+//                     ) : (
+//                         <Table>
+//                             <TableHeader>
+//                                 <TableRow>
+//                                     <TableHead>Receipt</TableHead>
+//                                     <TableHead>Date</TableHead>
+//                                     <TableHead>Method</TableHead>
+//                                     <TableHead className="text-right">Amount</TableHead>
+//                                     <TableHead>Status</TableHead>
+//                                     <TableHead />
+//                                 </TableRow>
+//                             </TableHeader>
+//                             <TableBody>
+//                                 {payments.map((p) => (
+//                                     <TableRow key={p._id}>
+//                                         <TableCell className="font-mono text-sm">
+//                                             {p.receiptNumber}
+//                                         </TableCell>
+//                                         <TableCell>{formatDate(p.createdAt)}</TableCell>
+//                                         <TableCell className="capitalize">
+//                                             {String(p.method).replace("_", " ")}
+//                                         </TableCell>
+//                                         <TableCell className="text-right font-semibold">
+//                                             {formatBDT(p.amount)}
+//                                         </TableCell>
+//                                         <TableCell>
+//                                             <Badge variant="outline">{p.status}</Badge>
+//                                         </TableCell>
+//                                         <TableCell>
+//                                             {p.status === "completed" && (
+//                                                 <Button variant="outline" size="sm" asChild>
+//                                                     <a
+//                                                         href={`${import.meta.env.VITE_API_URL}/pdf/receipt/${p._id}`}
+//                                                         target="_blank"
+//                                                         rel="noopener noreferrer"
+//                                                     >
+//                                                         <Download className="w-3 h-3 mr-1" />
+//                                                         Receipt
+//                                                     </a>
+//                                                 </Button>
+//                                             )}
+//                                         </TableCell>
+//                                     </TableRow>
+//                                 ))}
+//                             </TableBody>
+//                         </Table>
+//                     )}
+//                 </CardContent>
+//             </Card>
+
+//             {/* Advance */}
+//             {Number(advance.amount) > 0 && (
+//                 <Card>
+//                     <CardContent className="p-5 flex items-center gap-3">
+//                         <Wallet className="w-5 h-5 text-blue-600" />
+//                         <div>
+//                             <p className="text-sm text-gray-600">Advance balance available</p>
+//                             <p className="font-semibold">
+//                                 {formatBDT(advance.amount)} — will be auto-applied to future fees.
+//                             </p>
+//                         </div>
+//                     </CardContent>
+//                 </Card>
+//             )}
+//         </div>
+//     );
+// }
