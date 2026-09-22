@@ -1,21 +1,52 @@
-# docker/compose.yml
 name: school-app
+
 services:
 
   backend:
     build:
       context: ../backend
       dockerfile: Dockerfile
-
     container_name: school-backend
-
     restart: unless-stopped
-
     env_file:
       - .env
-
+    depends_on:
+      redis:
+        condition: service_healthy
     networks:
       - proxy-network
+      - app-network
+
+  notification-worker:
+    build:
+      context: ../backend
+      dockerfile: Dockerfile
+    container_name: school-notification-worker
+    restart: unless-stopped
+    command: ["node", "financeSystem/workers/notificationWorker.js"]
+    env_file:
+      - .env
+    depends_on:
+      redis:
+        condition: service_healthy
+    networks:
+      - proxy-network
+      - app-network
+
+  redis:
+    image: redis:7-alpine
+    container_name: school-redis
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+    networks:
+      - app-network
 
   frontend:
     build:
@@ -23,21 +54,26 @@ services:
       dockerfile: Dockerfile
       args:
         VITE_API_URL: ${VITE_API_URL}
-
     container_name: school-frontend
-
     restart: unless-stopped
-
     depends_on:
       - backend
-
     environment:
       BACKEND_HOST: ${BACKEND_HOST}
       BACKEND_PORT: ${BACKEND_PORT}
-
     networks:
       - proxy-network
 
+
 networks:
+
   proxy-network:
     external: true
+
+  app-network:
+    driver: bridge
+
+
+volumes:
+
+  redis-data:

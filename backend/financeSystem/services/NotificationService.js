@@ -5,7 +5,7 @@ const Handlebars = require('handlebars');
 
 const Notification = require('../models/Notification');
 const NotificationPreference = require('../models/NotificationPreference');
-const { notificationsQueue, isQueueEnabled } = require('../../config/queue');
+const queueConfig = require('../../config/queue');
 const transporter = require('../../config/mail');
 const sms = require('../../config/sms');
 const logger = require('../../utils/logger');
@@ -113,9 +113,9 @@ class NotificationService {
      * Enqueue or run a job. If queue is unavailable, run inline.
      */
     static async dispatch(jobName, payload, options = {}) {
-        if (isQueueEnabled()) {
+        if (queueConfig.isQueueEnabled()) {
             try {
-                await notificationsQueue.add(jobName, payload, options);
+                await queueConfig.notificationsQueue.add(jobName, payload, options);
                 return;
             } catch (err) {
                 logger.warn('[notification] enqueue failed, falling back to inline', { error: err.message });
